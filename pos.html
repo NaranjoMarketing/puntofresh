@@ -1,0 +1,2824 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto Fresh - Panel de Administración y POS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        fresh: {
+                            purple: '#2E062B',       
+                            lightPurple: '#FAF0F9',  
+                            pink: '#E1B1D7',         
+                            pastelGreen: '#E2F0D9',  
+                            cream: '#FFFDF9',        
+                            dark: '#1E031B',         
+                            gold: '#D4AF37'          
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'serif']
+                    }
+                }
+            }
+        }
+
+        // --- INTEGRACIÓN GOOGLE APPS SCRIPT ---
+        const URL_API = 'https://script.google.com/macros/s/AKfycbyEMUFe0c-Nelpo_Q7OShxYwzodE_Pd1NAJDoblCKr-RJDkyGU2208deURVIFSMgk3x/exec';
+
+        function esUrlDummy() {
+            return !URL_API || 
+                   URL_API.includes("AKfycbylHnZt_Z7yM2s69QYx_lF-pU_uNf86Uu9D_u8n1D7M9b1eRz_m4_XpQ1V-pP") || 
+                   !URL_API.includes("macros/s/AKfycb") ||
+                   URL_API.includes("REEMPLAZAR");
+        }
+
+        async function sincronizarConGoogle(action, payload) {
+            try {
+                if (esUrlDummy()) {
+                    console.log("Sincronización local activa (Offline).");
+                    return;
+                }
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                await fetch(URL_API, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: action,
+                        data: payload,
+                        timestamp: new Date().toLocaleString()
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                console.log("Sincronizado con Google Sheets exitosamente.");
+            } catch (error) {
+                console.warn("Mantenido localmente de forma segura (Offline).");
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #FFFDF9; 
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #FAF0F9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #E1B1D7;
+            border-radius: 99px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2E062B;
+        }
+
+        @media print {
+            @page { margin: 0; }
+            body.printing-mode * { visibility: hidden; }
+            body.printing-mode #print-receipt-area, body.printing-mode #print-receipt-area * { visibility: visible; }
+            body.printing-mode { background-color: white !important; }
+            body.printing-mode #print-receipt-area {
+                position: absolute; left: 0; top: 0; width: 100%; max-width: 80mm; 
+                background: white; color: black; font-size: 12px; line-height: 1.2;
+                padding: 10px; margin: 0; font-family: monospace; display: block !important;
+            }
+        }
+    </style>
+</head>
+<body class="text-fresh-dark min-h-screen flex flex-col" onload="loadDataFromCloud()">
+
+    <!-- PANTALLA DE ACCESO / LOGIN -->
+    <div id="login-screen" class="fixed inset-0 z-[200] bg-fresh-purple flex items-center justify-center p-4 transition-all duration-500">
+        <div class="bg-white max-w-sm w-full rounded-3xl p-8 shadow-2xl border border-fresh-pink/20 text-center flex flex-col items-center">
+            <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Punto Fresh Logo" class="h-20 w-auto object-contain mb-4" onerror="this.onerror=null;this.src='https://placehold.co/150x50/2E062B/white?text=POS';">
+            <h2 class="font-serif text-xl font-black text-fresh-purple mb-1">Terminal Punto Fresh</h2>
+            <p class="text-xs text-neutral-400 mb-6">Ingresa credenciales para acceder al sistema POS</p>
+            
+            <form onsubmit="handleLogin(event)" class="w-full space-y-4">
+                <div class="text-left text-xs">
+                    <label class="block font-bold text-neutral-500 uppercase mb-1">Usuario</label>
+                    <div class="relative">
+                        <input type="text" id="login-user" required placeholder="ej: admin" class="w-full bg-neutral-50 border border-neutral-200 py-3 px-4 pl-10 rounded-xl text-xs font-bold text-fresh-purple outline-none focus:ring-2 focus:ring-fresh-purple transition-all">
+                        <i class="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400"></i>
+                    </div>
+                </div>
+                
+                <div class="text-left text-xs">
+                    <label class="block font-bold text-neutral-500 uppercase mb-1">Contraseña</label>
+                    <div class="relative">
+                        <input type="password" id="login-pass" required placeholder="••••••••" class="w-full bg-neutral-50 border border-neutral-200 py-3 px-4 pl-10 rounded-xl text-xs font-bold text-fresh-purple outline-none focus:ring-2 focus:ring-fresh-purple transition-all">
+                        <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400"></i>
+                    </div>
+                </div>
+                
+                <button type="submit" class="w-full bg-fresh-purple hover:bg-fresh-dark text-white font-bold py-3 px-6 rounded-xl text-xs shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-to-bracket text-fresh-pink"></i> Iniciar Sesión
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ÁREA DE IMPRESIÓN EXCLUSIVA TICKET TÉRMICO -->
+    <div id="print-receipt-area" class="hidden"></div>
+
+    <!-- CONTENEDOR DE TOASTS -->
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-[90%] max-w-md text-center"></div>
+
+    <!-- MODAL CONFIRMACIÓN PERSONALIZADO -->
+    <div id="custom-confirm-modal" class="fixed inset-0 z-[110] bg-fresh-purple/75 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="confirm-box">
+            <div class="text-center">
+                <div class="w-12 h-12 bg-fresh-lightPurple text-fresh-purple rounded-full flex items-center justify-center text-xl mx-auto mb-4">
+                    <i class="fa-solid fa-question"></i>
+                </div>
+                <h3 class="font-serif text-lg font-bold text-fresh-purple mb-2" id="confirm-title">¿Estás seguro?</h3>
+                <p class="text-xs text-neutral-500 mb-6" id="confirm-message">Esta acción no se puede deshacer.</p>
+                <div class="flex gap-3 justify-center">
+                    <button id="confirm-cancel-btn" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition-all">Cancelar</button>
+                    <button id="confirm-ok-btn" class="px-5 py-2 bg-fresh-purple hover:bg-fresh-dark text-white text-xs font-bold rounded-xl shadow-md transition-all">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL APERTURA DE CAJA -->
+    <div id="apertura-modal" class="fixed inset-0 z-[120] bg-fresh-purple/85 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-xs w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="apertura-box">
+            <div class="text-center mb-4">
+                <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto mb-2">
+                    <i class="fa-solid fa-lock-open"></i>
+                </div>
+                <h3 class="font-serif text-lg font-bold text-fresh-purple">Iniciar Caja Diaria</h3>
+                <p class="text-xs text-neutral-500">Ingresa el saldo base inicial en efectivo para iniciar el turno.</p>
+            </div>
+            <div class="space-y-3">
+                <input type="number" id="apertura-base-amount" placeholder="Base de caja ($)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-3 px-4 rounded-xl text-sm font-bold text-fresh-purple outline-none focus:ring-2 focus:ring-fresh-purple">
+                <div class="flex gap-2 justify-end">
+                    <button onclick="closeAperturaModal()" class="px-4 py-2 bg-neutral-100 text-neutral-700 text-xs font-bold rounded-xl">Cancelar</button>
+                    <button onclick="confirmApertura()" class="px-5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-md">Abrir Turno</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CIERRE DE CAJA -->
+    <div id="cierre-modal" class="fixed inset-0 z-[120] bg-fresh-purple/90 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300 overflow-y-auto">
+        <div class="bg-white max-w-2xl w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300 my-8 max-h-[90vh] flex flex-col" id="cierre-box">
+            <div class="flex justify-between items-center border-b pb-3 mb-4 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center"><i class="fa-solid fa-lock"></i></span>
+                    <h3 class="font-serif text-lg font-bold text-fresh-purple">Cierre y Arqueo Diario</h3>
+                </div>
+                <button onclick="closeCierreModal()" class="text-neutral-400 hover:text-neutral-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <div class="overflow-y-auto flex-grow space-y-4 pr-1 text-xs">
+                <!-- Teórico de Caja -->
+                <div class="bg-neutral-50 p-4 rounded-xl border border-neutral-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="text-center">
+                        <p class="text-[10px] text-neutral-500 uppercase font-bold">Base Caja</p>
+                        <h4 id="cierre-base-teorica" class="font-bold text-sm text-fresh-purple">$0</h4>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-neutral-500 uppercase font-bold">Ventas Efectivo</p>
+                        <h4 id="cierre-efectivo-teorico" class="font-bold text-sm text-fresh-purple">$0</h4>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-neutral-500 uppercase font-bold">Abonos Clientes</p>
+                        <h4 id="cierre-abonos-teorico" class="font-bold text-sm text-emerald-600">$0</h4>
+                    </div>
+                    <div class="text-center bg-red-50/50 rounded p-1 border border-red-100/30">
+                        <p class="text-[10px] text-red-600 uppercase font-bold">Egresos / Gastos</p>
+                        <h4 id="cierre-gastos-teorico" class="font-bold text-sm text-red-600">$0</h4>
+                    </div>
+                </div>
+
+                <!-- Cuadre de Valores Reales -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
+                    <!-- Efectivo -->
+                    <div class="bg-amber-50/30 p-3 rounded-xl border border-amber-100">
+                        <h5 class="font-bold text-fresh-purple mb-2 flex items-center gap-1"><i class="fa-solid fa-money-bill-wave text-amber-600"></i> Efectivo Físico</h5>
+                        <div class="space-y-2">
+                            <div>
+                                <p class="text-[10px] text-neutral-500">Esperado:</p>
+                                <p id="cierre-efectivo-esperado" class="font-black text-sm text-fresh-purple">$0</p>
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-neutral-500 font-bold block mb-0.5">Real en Caja:</label>
+                                <input type="number" id="cierre-efectivo-real" oninput="calculateCierreDiferencias()" placeholder="Monto contado" class="w-full bg-white border border-fresh-pink/20 px-2 py-1.5 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-fresh-purple">
+                            </div>
+                            <div class="pt-1 border-t flex justify-between items-center text-[10px]">
+                                <span>Diferencia:</span>
+                                <span id="cierre-efectivo-dif" class="font-bold text-xs">$0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transferencia -->
+                    <div class="bg-blue-50/30 p-3 rounded-xl border border-blue-100">
+                        <h5 class="font-bold text-fresh-purple mb-2 flex items-center gap-1"><i class="fa-solid fa-mobile-screen text-blue-600"></i> Transferencias</h5>
+                        <div class="space-y-2">
+                            <div>
+                                <p class="text-[10px] text-neutral-500">Esperado:</p>
+                                <p id="cierre-trans-esperado" class="font-black text-sm text-fresh-purple">$0</p>
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-neutral-500 font-bold block mb-0.5">Real Bancos:</label>
+                                <input type="number" id="cierre-trans-real" oninput="calculateCierreDiferencias()" placeholder="Monto verificado" class="w-full bg-white border border-fresh-pink/20 px-2 py-1.5 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-fresh-purple">
+                            </div>
+                            <div class="pt-1 border-t flex justify-between items-center text-[10px]">
+                                <span>Diferencia:</span>
+                                <span id="cierre-trans-dif" class="font-bold text-xs">$0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nequi -->
+                    <div class="bg-purple-50/30 p-3 rounded-xl border border-purple-100">
+                        <h5 class="font-bold text-fresh-purple mb-2 flex items-center gap-1"><i class="fa-solid fa-wallet text-purple-600"></i> Nequi</h5>
+                        <div class="space-y-2">
+                            <div>
+                                <p class="text-[10px] text-neutral-500">Esperado:</p>
+                                <p id="cierre-nequi-esperado" class="font-black text-sm text-fresh-purple">$0</p>
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-neutral-500 font-bold block mb-0.5">Real Nequi:</label>
+                                <input type="number" id="cierre-nequi-real" oninput="calculateCierreDiferencias()" placeholder="Monto en App" class="w-full bg-white border border-fresh-pink/20 px-2 py-1.5 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-fresh-purple">
+                            </div>
+                            <div class="pt-1 border-t flex justify-between items-center text-[10px]">
+                                <span>Diferencia:</span>
+                                <span id="cierre-nequi-dif" class="font-bold text-xs">$0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen consolidado -->
+                <div id="cierre-dif-resumen-box" class="p-3 rounded-xl border text-center font-bold text-sm bg-neutral-100 text-neutral-700">
+                    Diferencia Consolidada de Caja: <span id="cierre-dif-total-val">$0</span>
+                </div>
+
+                <!-- Discriminaciones -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                    <!-- Abonos y Créditos -->
+                    <div class="bg-neutral-50 p-3 rounded-xl border border-neutral-100">
+                        <h5 class="font-bold text-fresh-purple mb-2 flex items-center gap-1"><i class="fa-solid fa-address-book text-emerald-600"></i> Créditos y Abonos</h5>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span>Ventas a Crédito (No alteran flujo):</span>
+                                <span id="cierre-credito-total" class="font-extrabold text-neutral-600">$0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span>Abonos Recibidos:</span>
+                                <span id="cierre-abonos-total" class="font-extrabold text-emerald-600">$0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ventas por Categoría -->
+                    <div class="bg-neutral-50 p-3 rounded-xl border border-neutral-100 flex flex-col h-40">
+                        <h5 class="font-bold text-fresh-purple mb-2 flex items-center gap-1"><i class="fa-solid fa-chart-pie text-fresh-pink"></i> Ventas por Categoría</h5>
+                        <div class="space-y-1 overflow-y-auto flex-grow pr-1" id="cierre-categorias-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t pt-3 mt-4 flex gap-3 justify-end shrink-0">
+                <button onclick="closeCierreModal()" class="px-4 py-2 bg-neutral-100 text-neutral-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="confirmCierreCaja()" class="px-5 py-2 bg-red-600 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1"><i class="fa-solid fa-lock"></i> Cerrar Turno e Imprimir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ABONO CLIENTES -->
+    <div id="abono-modal" class="fixed inset-0 z-[120] bg-fresh-purple/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-xs w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="abono-box">
+            <h3 class="font-serif text-lg font-bold text-fresh-purple mb-1">Registrar Abono</h3>
+            <p id="abono-client-name" class="text-xs text-neutral-500 mb-4 font-bold">Cliente</p>
+            <input type="number" id="abono-amount" placeholder="Monto del abono ($)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-3 px-4 rounded-xl text-sm font-bold text-fresh-purple mb-4 outline-none focus:ring-2 focus:ring-fresh-purple">
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeAbonoModal()" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="processAbono()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md">Aplicar Abono</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER DE CONTROL GENERAL -->
+    <header class="bg-fresh-purple py-4 px-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Logo" class="h-14 w-auto object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x50/2E062B/white?text=POS';">
+            <h1 class="text-white font-serif text-xl font-bold tracking-wide">Terminal POS & Caja</h1>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="index.html" target="_blank" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10">
+                <i class="fa-solid fa-store text-fresh-pink"></i> Ver Carta Clientes
+            </a>
+            <a href="waiter.html" target="_blank" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10">
+                <i class="fa-solid fa-mobile-screen-button text-emerald-400"></i> Pantalla Meseros
+            </a>
+            <a href="kitchen.html" target="_blank" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10">
+                <i class="fa-solid fa-kitchen-set text-amber-400"></i> Pantalla Cocina
+            </a>
+            <button onclick="logoutSession()" class="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-rose-500/30">
+                <i class="fa-solid fa-right-from-bracket"></i> Salir
+            </button>
+        </div>
+    </header>
+
+    <!-- BANNER DINÁMICO DE CONFIGURACIÓN -->
+    <div id="company-dynamic-banner" class="bg-fresh-pink text-fresh-purple py-2 px-4 font-bold text-center text-xs shadow-sm flex items-center justify-center gap-2">
+        <span id="banner-text-val">Caja Abierta y Sincronizada</span>
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <main id="view-admin" class="flex-grow max-w-7xl mx-auto w-full p-4 md:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-fresh-pink/10 pb-4">
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button onclick="switchTab('pos')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold bg-fresh-purple text-white"><i class="fa-solid fa-cash-register mr-1 text-fresh-pink"></i> Facturar / Caja</button>
+                <button onclick="switchTab('clients')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-address-book mr-1 text-emerald-500"></i> Clientes / Crédito</button>
+                <button onclick="switchTab('inventory')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-ice-cream mr-1"></i> Catálogo / Menú</button>
+                <button onclick="switchTab('expenses')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-receipt mr-1"></i> Gastos / Insumos</button>
+                <button onclick="switchTab('history')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Ventas del Día</button>
+                <button onclick="switchTab('finances')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-chart-line mr-1"></i> Cierres Contables</button>
+                <button onclick="switchTab('settings')" class="admin-tab-btn px-4 py-2 rounded-lg text-sm font-bold text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-gear mr-1"></i> Ajustes</button>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="loadDataFromCloud()" class="bg-white border border-fresh-pink/30 text-fresh-purple font-bold text-xs px-3 py-2 rounded-xl hover:bg-fresh-lightPurple"><i class="fa-solid fa-cloud-arrow-down"></i> Sincronizar</button>
+            </div>
+        </div>
+
+        <!-- SUBTAB 1: FACTURAR / CAJA -->
+        <section id="tab-pos" class="admin-tab-content space-y-4">
+            
+            <!-- PANEL DE CONTROL DE CAJA DIARIA -->
+            <div id="cash-register-control-panel" class="bg-white p-5 rounded-2xl border border-fresh-pink/20 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div id="cash-status-indicator-icon" class="w-10 h-10 rounded-full flex items-center justify-center text-lg bg-rose-100 text-rose-600">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-serif text-base font-bold text-fresh-purple" id="cash-status-title">Control de Caja Cerrado</h4>
+                        <p class="text-xs text-neutral-500" id="cash-status-subtitle">Abre la caja hoy para poder registrar facturas.</p>
+                    </div>
+                </div>
+                <div id="cash-status-actions" class="shrink-0">
+                    <button onclick="openAperturaModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-1 transition-all">
+                        <i class="fa-solid fa-lock-open"></i> Abrir Caja Diaria
+                    </button>
+                </div>
+            </div>
+
+            <!-- ÁREA INTERACTIVA CON CAPA DE BLOQUEO -->
+            <div class="relative grid grid-cols-1 lg:grid-cols-3 gap-6" id="pos-billing-interactive-area">
+                
+                <!-- CAPA BLOQUEO DE CAJA CERRADA -->
+                <div id="pos-billing-lock-overlay" class="absolute inset-0 bg-fresh-purple/5 backdrop-blur-[2px] rounded-2xl flex items-center justify-center text-center p-6 z-[30]">
+                    <div class="bg-white p-6 rounded-2xl shadow-xl max-w-sm border border-fresh-pink/20">
+                        <div class="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 animate-pulse">
+                            <i class="fa-solid fa-lock"></i>
+                        </div>
+                        <h4 class="font-serif text-lg font-bold text-fresh-purple mb-2">Facturación Desactivada</h4>
+                        <p class="text-xs text-neutral-500 mb-4">La caja diaria se encuentra cerrada. Abre la caja diaria ingresando una base para reanudar el POS.</p>
+                        <button onclick="openAperturaModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md transition-all">
+                            <i class="fa-solid fa-lock-open mr-1"></i> Abrir Caja Diaria
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 flex flex-col gap-4">
+                    <!-- PEDIDOS WEB / CLIENTES POR CONFIRMAR -->
+                    <div id="pos-web-orders-container"></div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm">
+                        <h3 class="font-serif text-lg font-bold mb-4 text-fresh-purple flex items-center justify-between">
+                            <span>Cuentas por Mesa / Pedido Local</span>
+                            <span class="text-xs bg-red-50 text-red-600 px-2.5 py-1 rounded-full font-bold">Por cobrar</span>
+                        </h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="pos-billing-tables-grid"></div>
+                    </div>
+                    
+                    <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm flex-grow">
+                        <h3 class="font-serif text-lg font-bold mb-3 text-fresh-purple">Venta Rápida POS</h3>
+                        <input type="text" id="pos-search" oninput="searchPOSProducts()" placeholder="Buscar producto rápido..." class="w-full bg-neutral-50 border border-fresh-pink/20 py-3 px-5 rounded-xl text-sm font-bold mb-4">
+                        <div id="pos-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+                
+                <!-- FACTURACIÓN TICKET -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-fresh-pink/10 flex flex-col min-h-[550px]">
+                    <h3 class="font-serif text-lg font-bold mb-3 pb-2 border-b flex justify-between items-center">
+                        <span>Cerrar Comanda / Cuenta</span>
+                        <button onclick="clearPOSCart()" class="text-xs text-red-500 font-bold hover:underline">Limpiar</button>
+                    </h3>
+                    <div class="mb-3 space-y-2">
+                        <div class="grid grid-cols-1 gap-2">
+                            <!-- NUEVA FUNCIÓN: Seleccionar Mesa desde Caja -->
+                            <label class="text-[10px] uppercase font-bold text-neutral-500">Mesa / Ubicación del Pedido</label>
+                            <select id="pos-table-select" onchange="applyPOSTableSelect()" class="w-full bg-white border border-fresh-pink/30 py-2 px-3 rounded-lg text-xs font-bold text-fresh-purple focus:ring-1 focus:ring-fresh-purple outline-none mb-1">
+                                <option value="">-- Sin Mesa / Venta Rápida --</option>
+                            </select>
+
+                            <label class="text-[10px] uppercase font-bold text-neutral-500">Datos del Cliente</label>
+                            <select id="pos-client-select" onchange="applyPOSClientData()" class="w-full bg-white border border-fresh-pink/30 py-2 px-3 rounded-lg text-xs font-bold text-fresh-purple focus:ring-1 focus:ring-fresh-purple outline-none">
+                                <option value="">-- Cliente Casual / Mostrador --</option>
+                            </select>
+                            <input type="text" id="pos-client-name" placeholder="Nombre de Cliente o Mesa" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-lg text-xs font-bold text-fresh-purple">
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="pos-client-phone" placeholder="WhatsApp (Opcional)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
+                                <input type="text" id="pos-client-address" placeholder="Dirección Domicilio" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
+                            </div>
+                            <input type="text" id="pos-client-comment" placeholder="Comentario / Nota interna" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
+                            <input type="hidden" id="pos-selected-table-id" value="">
+                            <p class="text-[10px] text-neutral-400" id="pos-waiter-indicator">Atiende: <span class="text-fresh-purple font-bold">Caja</span></p>
+                        </div>
+                    </div>
+
+                    <div id="pos-cart-items" class="flex-grow overflow-y-auto space-y-3 mb-4 pr-1 border-t pt-2">
+                        <p class="text-center text-xs text-neutral-400 py-8">Selecciona una mesa o agrega artículos rápidos.</p>
+                    </div>
+                    
+                    <div class="border-t pt-3 space-y-3">
+                        <div class="flex justify-between font-bold text-xl text-fresh-purple">
+                            <span>Total Cuenta:</span><span id="pos-total" class="text-fresh-purple text-2xl">$0</span>
+                        </div>
+
+                        <!-- PANEL DETALLADO PARA PAGO MIXTO -->
+                        <div id="pos-mixed-panel" class="hidden bg-fresh-lightPurple/60 p-3 rounded-xl border border-fresh-pink/30 space-y-2 mt-2">
+                            <p class="text-[10px] font-black uppercase text-fresh-purple">Desglose de Pago Mixto</p>
+                            <div class="grid grid-cols-3 gap-2 text-[11px]">
+                                <div>
+                                    <label class="block text-neutral-500 mb-0.5 font-bold">Efectivo:</label>
+                                    <input type="number" id="pos-mixed-cash" value="0" oninput="calculateMixedTotals()" class="w-full bg-white border border-fresh-pink/20 p-1.5 rounded-lg text-center font-bold">
+                                </div>
+                                <div>
+                                    <label class="block text-neutral-500 mb-0.5 font-bold">Transf:</label>
+                                    <input type="number" id="pos-mixed-trans" value="0" oninput="calculateMixedTotals()" class="w-full bg-white border border-fresh-pink/20 p-1.5 rounded-lg text-center font-bold">
+                                </div>
+                                <div>
+                                    <label class="block text-neutral-500 mb-0.5 font-bold">Nequi:</label>
+                                    <input type="number" id="pos-mixed-nequi" value="0" oninput="calculateMixedTotals()" class="w-full bg-white border border-fresh-pink/20 p-1.5 rounded-lg text-center font-bold">
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-[10px] font-bold text-neutral-600 mt-1">
+                                <span>Sumado: <span id="pos-mixed-paid-lbl" class="text-emerald-600 font-black">$0</span></span>
+                                <span>Pendiente: <span id="pos-mixed-pending-lbl" class="text-rose-500 font-black">$0</span></span>
+                            </div>
+                        </div>
+
+                        <!-- DINERO RECIBIDO Y CAMBIO/DEVOLUCIÓN (PARA EFECTIVO) -->
+                        <div id="pos-normal-cash-panel" class="bg-fresh-lightPurple/60 p-3 rounded-xl border border-fresh-pink/30 space-y-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <label class="text-[11px] font-black uppercase text-fresh-purple">Pago Con (Efectivo):</label>
+                                <div class="relative w-32">
+                                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-fresh-purple/70">$</span>
+                                    <input type="number" id="pos-cash-received" oninput="calculatePOSChange()" placeholder="0" class="w-full bg-white border border-fresh-pink/30 py-1.5 pl-6 pr-2.5 rounded-lg text-xs font-black text-right focus:outline-none focus:ring-1 focus:ring-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between text-xs font-bold text-fresh-purple">
+                                <span>Devolución / Vueltas:</span>
+                                <span id="pos-change-amount" class="font-extrabold text-sm text-emerald-600">$0</span>
+                            </div>
+                        </div>
+                        
+                        <!-- BOTONES DE MÉTODOS DE PAGO -->
+                        <div class="grid grid-cols-5 gap-1">
+                            <button onclick="setPOSPayment('Transferencia')" id="pos-pay-transfer" class="py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark"><i class="fa-solid fa-mobile-screen block text-center mb-1 text-xs"></i> Transf.</button>
+                            <button onclick="setPOSPayment('Nequi')" id="pos-pay-nequi" class="py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark"><i class="fa-solid fa-wallet block text-center mb-1 text-xs"></i> Nequi</button>
+                            <button onclick="setPOSPayment('Efectivo')" id="pos-pay-cash" class="py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark"><i class="fa-solid fa-money-bill block text-center mb-1 text-xs"></i> Efect.</button>
+                            <button onclick="setPOSPayment('Mixto')" id="pos-pay-mixed" class="py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark"><i class="fa-solid fa-layer-group block text-center mb-1 text-xs"></i> Mixto</button>
+                            <button onclick="setPOSPayment('Crédito')" id="pos-pay-credit" class="py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark"><i class="fa-solid fa-address-book block text-center mb-1 text-xs"></i> Créd.</button>
+                        </div>
+
+                        <!-- NUEVA DISPOSICIÓN DE BOTONES OPERATIVOS -->
+                        <button onclick="sendPOSOrderToKitchen()" class="w-full bg-purple-900/10 hover:bg-purple-900/20 text-fresh-purple border border-fresh-purple/35 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-paper-plane"></i> Enviar Pedido a Cocina
+                        </button>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="printCurrentPOS()" class="w-full bg-neutral-600 text-white py-3 rounded-xl font-bold shadow-lg text-sm hover:bg-neutral-700 transition-all">
+                                <i class="fa-solid fa-print mr-1"></i> Imprimir
+                            </button>
+                            <button onclick="processPOSSale(false)" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg text-sm hover:bg-emerald-700 transition-all">
+                                <i class="fa-solid fa-cash-register mr-1"></i> Facturar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUBTAB 2: CLIENTES Y CRÉDITOS -->
+        <section id="tab-clients" class="admin-tab-content hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="flex flex-col gap-4 h-full">
+                <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm">
+                    <h3 class="font-serif text-lg font-bold mb-3 text-fresh-purple border-b border-fresh-pink/20 pb-2"><i class="fa-solid fa-user-plus text-emerald-500 mr-2"></i> Nuevo Cliente / Crédito</h3>
+                    <div class="space-y-2 text-xs">
+                        <input type="text" id="new-client-name" placeholder="Nombre completo del cliente" class="w-full bg-neutral-50 border border-fresh-pink/30 py-2.5 px-3 rounded-lg font-bold outline-none focus:ring-1 focus:ring-fresh-purple">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" id="new-client-phone" placeholder="Celular (WhatsApp)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-lg outline-none focus:ring-1 focus:ring-fresh-purple">
+                            <input type="number" id="new-client-limit" placeholder="Cupo Máx. Crédito" class="w-full bg-fresh-lightPurple border border-fresh-pink/30 py-2.5 px-3 rounded-lg font-bold text-fresh-purple outline-none focus:ring-1 focus:ring-fresh-purple">
+                        </div>
+                        <input type="text" id="new-client-address" placeholder="Dirección de Domicilio" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-lg outline-none focus:ring-1 focus:ring-fresh-purple">
+                        <button onclick="saveNewClient()" class="w-full bg-fresh-purple text-white py-3 rounded-xl font-bold shadow-md hover:bg-fresh-dark transition-all mt-1">Registrar Cliente</button>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm flex-grow flex flex-col min-h-[300px]">
+                    <h3 class="font-serif text-lg font-bold mb-3 text-fresh-purple border-b border-fresh-pink/20 pb-2"><i class="fa-solid fa-address-book text-fresh-pink mr-2"></i> Directorio Registrado</h3>
+                    <div class="relative mb-3">
+                        <input type="text" id="search-client-input" oninput="renderClientsList()" placeholder="Buscar por nombre..." class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 pr-8 rounded-lg text-xs outline-none focus:ring-1 focus:ring-fresh-purple">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 text-xs"></i>
+                    </div>
+                    <div id="clients-list-container" class="flex-grow overflow-y-auto max-h-[400px] space-y-2 pr-1"></div>
+                </div>
+            </div>
+            
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-fresh-pink/10 shadow-sm flex flex-col min-h-[600px] relative">
+                <div id="client-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-neutral-400 bg-white rounded-2xl z-10">
+                    <div class="w-20 h-20 bg-neutral-50 rounded-full flex items-center justify-center mb-4 border border-neutral-100">
+                        <i class="fa-solid fa-file-invoice-dollar text-4xl text-neutral-300"></i>
+                    </div>
+                    <h3 class="font-serif text-xl font-bold text-neutral-500 mb-1">Estado de Cuenta</h3>
+                    <p class="text-xs">Selecciona un cliente del directorio para gestionar sus créditos y abonos.</p>
+                </div>
+                
+                <div id="client-statement-panel" class="hidden flex-col h-full opacity-0 transition-opacity duration-300">
+                    <div class="flex flex-col sm:flex-row justify-between sm:items-start border-b border-fresh-pink/20 pb-4 mb-4 gap-4">
+                        <div>
+                            <span class="bg-fresh-pink/20 text-fresh-purple text-[9px] px-2 py-0.5 rounded-full font-black uppercase mb-2 inline-block border border-fresh-pink/30">Perfil de Crédito</span>
+                            <h2 id="stmt-name" class="font-serif text-2xl md:text-3xl font-bold text-fresh-purple uppercase leading-tight">Nombre Cliente</h2>
+                            <p id="stmt-details" class="text-xs text-neutral-500 mt-1.5 flex gap-3 font-medium">
+                                <span><i class="fa-solid fa-phone text-fresh-pink mr-1"></i> <span id="stmt-phone"></span></span>
+                                <span><i class="fa-solid fa-location-dot text-fresh-pink mr-1"></i> <span id="stmt-address"></span></span>
+                            </p>
+                        </div>
+                        <button onclick="printClientStatement()" class="bg-neutral-50 border border-neutral-200 text-fresh-dark px-4 py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-100 transition-all shrink-0 flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-print"></i> Imprimir Estado
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                        <div class="bg-neutral-50 p-4 rounded-xl border border-fresh-pink/10 text-center flex flex-col justify-center">
+                            <p class="text-[10px] uppercase font-bold text-neutral-500 mb-1">Cupo Asignado</p>
+                            <h4 id="stmt-limit" class="font-black text-xl text-fresh-purple">$0</h4>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-xl border border-red-200 text-center flex flex-col justify-center shadow-inner">
+                            <p class="text-[10px] uppercase font-bold text-red-600 mb-1"><i class="fa-solid fa-circle-exclamation mr-1"></i> Deuda Actual</p>
+                            <h4 id="stmt-balance" class="font-black text-2xl text-red-600">$0</h4>
+                        </div>
+                        <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-200 text-center flex flex-col justify-center shadow-inner">
+                            <p class="text-[10px] uppercase font-bold text-emerald-700 mb-1"><i class="fa-solid fa-wallet mr-1"></i> Cupo Disponible</p>
+                            <h4 id="stmt-available" class="font-black text-xl text-emerald-700">$0</h4>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
+                        <h3 class="font-bold text-sm text-fresh-purple uppercase tracking-wide">Movimientos y Facturas</h3>
+                        <div class="flex gap-2">
+                            <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
+                            <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-grow overflow-y-auto border border-neutral-100 rounded-xl shadow-inner bg-neutral-50/50">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-neutral-100 sticky top-0 text-neutral-600 border-b border-neutral-200 shadow-sm">
+                                <tr>
+                                    <th class="p-3 font-bold">Fecha</th>
+                                    <th class="p-3 font-bold">Ref / Detalle</th>
+                                    <th class="p-3 font-bold text-right text-red-600">Cargo (-)</th>
+                                    <th class="p-3 font-bold text-right text-emerald-600">Abono (+)</th>
+                                    <th class="p-3 font-bold text-right text-fresh-purple">Saldo Actual</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stmt-transactions-rows" class="divide-y divide-neutral-100 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUBTAB 3: GESTIÓN DE CATÁLOGO / MENÚ -->
+        <section id="tab-inventory" class="admin-tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10 h-fit">
+                    <h3 class="font-serif text-lg font-bold mb-4 border-b pb-2 text-fresh-purple">Registrar Helado / Bebida</h3>
+                    <div class="space-y-4 text-xs">
+                        <input type="hidden" id="inv-edit-id" value="">
+                        <input type="hidden" id="inv-img-base64" value="">
+                        <div>
+                            <label class="block font-bold mb-1">Nombre del Artículo</label>
+                            <input type="text" id="inv-name" placeholder="Ej: Copa Madre Especial" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">Descripción / Ingredientes</label>
+                            <textarea id="inv-desc" placeholder="Detalle..." class="w-full bg-neutral-50 border px-3 py-2 rounded-xl h-12"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold mb-1 text-fresh-purple">Categoría</label>
+                                <select id="inv-category" class="w-full bg-neutral-50 border border-fresh-pink/30 px-3 py-2 rounded-xl font-bold">
+                                    <option value="Nativos y Saludables">Nativos y Saludables</option>
+                                    <option value="Granizados">Granizados</option>
+                                    <option value="Kids">Kids</option>
+                                    <option value="Gelato">Gelato</option>
+                                    <option value="Malteadas">Malteadas</option>
+                                    <option value="Fresas Locas">Fresas Locas</option>
+                                    <option value="Micheladas y Sodas">Micheladas y Sodas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-bold mb-1">Porción / Envase</label>
+                                <input type="text" id="inv-portion" placeholder="Ej: 12 onzas" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block font-bold mb-1">Unidad</label>
+                                <select id="inv-measure" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                                    <option value="Unidad">Unidad</option>
+                                    <option value="Porción">Porción</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-bold mb-1">Costo ($)</label>
+                                <input type="number" id="inv-cost" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                            </div>
+                            <div>
+                                <label class="block font-bold mb-1">Precio Venta</label>
+                                <input type="number" id="inv-price" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold mb-1">Stock Diario</label>
+                                <input type="number" id="inv-stock" value="99" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                            </div>
+                            <div>
+                                <label class="block font-bold mb-1">Foto Producto</label>
+                                <input type="file" id="inv-file" accept="image/*" onchange="handleInvImageUpload(event)" class="w-full text-[10px]">
+                            </div>
+                        </div>
+                        <div class="bg-fresh-lightPurple p-3 rounded-xl border border-fresh-pink/30 flex items-center gap-2">
+                            <input type="checkbox" id="inv-is-special" class="w-4 h-4 rounded text-fresh-purple focus:ring-fresh-purple">
+                            <label for="inv-is-special" class="font-bold text-[11px] text-fresh-purple select-none cursor-pointer">⭐ Pertenece al Catálogo Especial de Fechas</label>
+                        </div>
+                        <button onclick="saveInventoryProduct()" class="w-full bg-fresh-purple text-white py-3 rounded-xl font-bold shadow-md hover:bg-fresh-dark transition-all">Guardar en Catálogo</button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10 overflow-x-auto">
+                    <h3 class="font-serif text-lg font-bold mb-4 text-fresh-purple">Catálogo General de Productos</h3>
+                    <table class="w-full text-left text-sm">
+                        <tbody id="inventory-rows" class="divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUBTAB 4: GASTOS & COMPRAS -->
+        <section id="tab-expenses" class="admin-tab-content hidden grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10">
+                <h3 class="font-serif text-lg font-bold mb-4 text-fresh-purple">Registrar Gasto del Local</h3>
+                <div class="flex gap-2 text-xs mb-4">
+                    <input type="text" id="expense-desc" placeholder="Concepto (Ej: Energía)" class="flex-grow bg-neutral-50 border px-3 py-2 rounded-xl">
+                    <input type="number" id="expense-value" placeholder="Valor $" class="w-32 bg-neutral-50 border px-3 py-2 rounded-xl">
+                    <button onclick="saveExpense()" class="bg-fresh-purple text-white px-4 py-2 rounded-xl font-bold hover:bg-fresh-dark">Registrar</button>
+                </div>
+                <table class="w-full text-left text-sm"><tbody id="expenses-rows" class="divide-y"></tbody></table>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10">
+                <h3 class="font-serif text-lg font-bold mb-4 text-fresh-purple">Entrada de Insumos / Compras</h3>
+                <div class="space-y-3 text-xs mb-4">
+                    <input type="text" id="purch-supplier" placeholder="Proveedor de Insumos" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                    <select id="purch-prod-select" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl font-bold"></select>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="purch-qty" placeholder="Cantidad" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                        <input type="number" id="purch-cost" placeholder="Costo Unitario ($)" class="w-full bg-neutral-50 border px-3 py-2 rounded-xl">
+                    </div>
+                    <button onclick="addProdToPurchase()" class="w-full bg-fresh-pink text-fresh-purple py-2 rounded-xl font-bold">Añadir a la compra</button>
+                </div>
+                <div id="purch-cart-list" class="space-y-2 mb-3"></div>
+                <button onclick="processPurchase()" class="w-full bg-fresh-purple text-white py-3 rounded-xl font-bold shadow-md hover:bg-fresh-dark">Confirmar Entrada de Compra</button>
+                <div class="mt-6"><h4 class="font-bold mb-2">Compras Recientes</h4><table class="w-full text-left text-sm"><tbody id="purchases-rows"></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- SUBTAB 5: VENTAS DEL DÍA -->
+        <section id="tab-history" class="admin-tab-content hidden space-y-4">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10">
+                <h3 class="font-serif text-xl font-bold mb-4 text-fresh-purple">Historial de Comprobantes Emitidos</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-neutral-50 border-b text-xs text-neutral-500">
+                            <tr>
+                                <th class="p-3">Ref</th>
+                                <th class="p-3">Detalles de Venta</th>
+                                <th class="p-3 text-right">Total Pagado</th>
+                                <th class="p-3 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-rows" class="divide-y divide-neutral-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUBTAB 6: CIERRES CONTABLES -->
+        <section id="tab-finances" class="admin-tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h3 class="font-serif text-lg font-bold mb-1 text-fresh-purple">Cierre Contable e Histórico de Punto Fresh</h3>
+                    <p class="text-xs text-neutral-500 font-light">Filtra por fechas para ver periodos históricos o mantén el turno activo.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button onclick="downloadCierreExcel()" class="bg-fresh-purple text-white font-bold text-sm px-5 py-3 rounded-xl shadow-md hover:bg-fresh-dark">
+                        <i class="fa-solid fa-file-excel mr-1 text-fresh-pink"></i> Descargar Reporte CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- FILTRO DE FECHAS PARA HISTÓRICO -->
+            <div class="bg-white p-4 rounded-2xl border border-fresh-pink/20 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="text-xs">
+                    <label class="block font-bold text-neutral-500 uppercase mb-1">Fecha Inicial:</label>
+                    <input type="date" id="finance-start-date" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 font-bold outline-none text-fresh-purple focus:ring-1 focus:ring-fresh-purple">
+                </div>
+                <div class="text-xs">
+                    <label class="block font-bold text-neutral-500 uppercase mb-1">Fecha Final:</label>
+                    <input type="date" id="finance-end-date" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 font-bold outline-none text-fresh-purple focus:ring-1 focus:ring-fresh-purple">
+                </div>
+                <div class="flex items-end gap-2 text-xs">
+                    <button onclick="applyFinanceFilters()" class="flex-grow bg-fresh-purple text-white font-bold py-3 rounded-xl hover:bg-fresh-dark transition shadow-md">Filtrar Fechas</button>
+                    <button onclick="clearFinanceFilters()" class="bg-neutral-100 text-neutral-600 font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition">Limpiar</button>
+                </div>
+            </div>
+
+            <!-- METRICAS DE RENDIMIENTO -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-fresh-pink/10">
+                    <p class="text-xs font-bold text-neutral-500 uppercase mb-1">Venta Total Recaudada</p>
+                    <h4 id="metric-revenue" class="text-2xl font-bold text-emerald-600">$0</h4>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-fresh-pink/10">
+                    <p class="text-xs font-bold text-neutral-500 uppercase mb-1">Costo de Insumos</p>
+                    <h4 id="metric-cost" class="text-2xl font-bold text-red-500">$0</h4>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-fresh-pink/10">
+                    <p class="text-xs font-bold text-neutral-500 uppercase mb-1">Gastos Operativos</p>
+                    <h4 id="metric-expenses" class="text-2xl font-bold text-red-500">$0</h4>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm bg-fresh-lightPurple border-l-4 border-fresh-purple">
+                    <p class="text-xs font-bold text-fresh-purple uppercase mb-1">Utilidad Neta Periodo</p>
+                    <h4 id="metric-profit" class="text-2xl font-bold text-fresh-purple">$0</h4>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- RANKING PRODUCTOS MÁS VENDIDOS -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10">
+                    <h3 class="font-serif text-lg font-bold mb-3 text-fresh-purple flex items-center gap-2">
+                        <i class="fa-solid fa-crown text-fresh-pink"></i> Récord Continuo de Helados más Vendidos
+                    </h3>
+                    <div class="overflow-y-auto max-h-[300px]">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-neutral-50 text-xs">
+                                <tr>
+                                    <th class="p-3">Nombre del Producto</th>
+                                    <th class="p-3 text-center">Unidades Totales Vendidas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-leaderboard-rows" class="divide-y"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- DESEMPEÑO MESEROS -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10">
+                    <h3 class="font-serif text-lg font-bold mb-3 text-fresh-purple flex items-center gap-2">
+                        <i class="fa-solid fa-ranking-star text-fresh-pink"></i> Cuadre de Caja & Servicios
+                    </h3>
+                    <div class="overflow-y-auto max-h-[300px]">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-neutral-50">
+                                <tr>
+                                    <th class="p-3">Mesero/Origen</th>
+                                    <th class="p-3 text-center">Servicios</th>
+                                    <th class="p-3 text-right">Venta Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="waiters-leaderboard-rows" class="divide-y"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUBTAB 7: AJUSTES -->
+        <section id="tab-settings" class="admin-tab-content hidden">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10 max-w-2xl mx-auto mt-6">
+                <div class="space-y-6">
+                    
+                    <!-- DIRECCIÓN DE FACTURACIÓN -->
+                    <div>
+                        <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Dirección de Facturación</label>
+                        <input type="text" id="settings-address" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                    </div>
+
+                    <!-- CUENTAS DE RECAUDO -->
+                    <div class="pt-4 border-t border-neutral-100">
+                        <h4 class="font-bold text-xs text-fresh-purple uppercase mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-credit-card text-emerald-500"></i> Cuentas de Recaudo
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Número de Celular Nequi</label>
+                                <input type="number" id="settings-nequi" placeholder="Ej: 3228586808" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Número Cuenta Bancolombia Ahorros</label>
+                                <input type="number" id="settings-bancolombia" placeholder="Ej: 71300000087977" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TEXTOS Y BANNER DEL CLIENTE -->
+                    <div class="pt-4 border-t border-neutral-100">
+                        <h4 class="font-bold text-xs text-fresh-purple uppercase mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-comment-dots text-fresh-pink"></i> Textos y Banner del Cliente
+                        </h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Mensaje Banda Lila (Anuncios Rápidos)</label>
+                                <input type="text" id="settings-announcement" placeholder="¡Ingredientes naturales seleccionados diariamente!" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Título del Banner Principal</label>
+                                    <input type="text" id="settings-banner-title" placeholder="Refresca y endulza tu vida" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Descripción del Banner Principal</label>
+                                    <input type="text" id="settings-banner-desc" placeholder="Disfruta de nuestros espectaculares helados soft..." class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- REPARTIDORES DE RESPALDO -->
+                    <div class="pt-4 border-t border-neutral-100">
+                        <h4 class="font-bold text-xs text-fresh-purple uppercase mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-motorcycle text-fresh-pink"></i> Repartidores de Respaldo
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <input type="text" id="settings-driver1" placeholder="Repartidor 1" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <input type="text" id="settings-driver2" placeholder="Repartidor 2" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <input type="text" id="settings-driver3" placeholder="Repartidor 3" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ACCESOS Y SEGURIDAD DEL POS -->
+                    <div class="pt-4 border-t border-neutral-100">
+                        <h4 class="font-bold text-xs text-fresh-purple uppercase mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-lock text-fresh-pink"></i> Accesos y Seguridad del POS
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Usuario Administrador / Cajero</label>
+                                <input type="text" id="settings-admin-user" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Contraseña de Acceso POS</label>
+                                <input type="text" id="settings-admin-pass" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Contraseña Acceso Meseros (PIN)</label>
+                                <input type="text" id="settings-waiter-pass" placeholder="Por defecto: 1234" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AJUSTES AUXILIARES DEL LOCAL (NIT, WHATSAPP, BANNER IMG) -->
+                    <div class="pt-4 border-t border-neutral-100">
+                        <h4 class="font-bold text-xs text-fresh-purple uppercase mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-gears text-neutral-500"></i> Metadatos de Local
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">WhatsApp Oficial</label>
+                                <input type="number" id="settings-phone" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">NIT de la Empresa</label>
+                                <input type="text" id="settings-nit" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">Imagen de Banner (URL)</label>
+                                <input type="text" id="settings-main-banner-img" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold outline-none text-xs text-fresh-purple">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="saveCompanySettings()" class="w-full mt-4 bg-fresh-purple hover:bg-fresh-dark text-white px-6 py-4 rounded-xl font-bold shadow-md transition-all uppercase tracking-wider text-xs">
+                        Guardar Configuración General
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-fresh-purple text-white py-6 mt-auto border-t-[5px] border-fresh-pink w-full z-30 relative shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col items-center justify-center gap-2">
+            <div class="text-center font-serif tracking-wide text-xs opacity-90">
+                © 2026 PUNTO FRESH - Módulo de Facturación, Caja y Control Financiero.
+            </div>
+            <div class="text-[10px] text-neutral-400 font-sans text-center">
+                Desarrollado de forma modular | Sincronizado en tiempo real.
+            </div>
+        </div>
+    </footer>
+
+    <!-- SCRIPT DE INICIALIZACIÓN Y NEGOCIO -->
+    <script>
+        const DB_PREFIX = "PUNTOFRESH_V1_"; 
+        
+        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
+        let companyNIT = localStorage.getItem(DB_PREFIX + 'companyNIT') || "901.754.218-3";
+        let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros - Inírida";
+        let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=600&auto=format&fit=crop";
+        
+        let driverPhone1 = localStorage.getItem(DB_PREFIX + 'driverPhone1') || "";
+        let driverPhone2 = localStorage.getItem(DB_PREFIX + 'driverPhone2') || "";
+        let driverPhone3 = localStorage.getItem(DB_PREFIX + 'driverPhone3') || "";
+
+        let adminUser = localStorage.getItem(DB_PREFIX + 'adminUser') || "admin";
+        let adminPass = localStorage.getItem(DB_PREFIX + 'adminPass') || "fresh123";
+
+        let products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
+        let orders = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders')) || [];
+        let expenses = JSON.parse(localStorage.getItem(DB_PREFIX + 'expenses')) || [];
+        let purchasesHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'purchases')) || [];
+        let pendingWebOrders = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
+        let clients = JSON.parse(localStorage.getItem(DB_PREFIX + 'clients')) || [];
+        let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
+
+        // --- SISTEMA APERTURA Y CIERRE DE CAJA ---
+        let cashRegisterState = JSON.parse(localStorage.getItem(DB_PREFIX + 'cashRegisterState')) || {
+            active: false,
+            openingBalance: 0,
+            openingTime: null
+        };
+
+        let posCart = []; let purchCart = [];
+        let posPayment = 'Transferencia';
+        let currentSelectedClient = null;
+        let selectedTableWaiter = "";
+        let currentFinanceFilter = null; 
+
+        // --- TOASTS DE CAJA ---
+        function showToast(msg, type='info') {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            const toast = document.createElement('div');
+            let bg = 'bg-fresh-purple border-fresh-pink/20';
+            if (type === 'success') bg = 'bg-emerald-600 border-white/20';
+            if (type === 'error') bg = 'bg-rose-600 border-white/20';
+            
+            toast.className = `mx-auto px-6 py-3 rounded-full text-white text-sm font-bold shadow-2xl transform transition-all duration-300 -translate-y-10 opacity-0 flex items-center justify-center gap-2 ${bg} border pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid fa-cash-register text-fresh-pink"></i> <span>${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.remove('-translate-y-10', 'opacity-0'); }, 10);
+            setTimeout(() => { 
+                toast.classList.add('-translate-y-10', 'opacity-0'); 
+                setTimeout(() => toast.remove(), 300); 
+            }, 3500);
+        }
+
+        window.alert = function(msg) {
+            showToast(msg, 'info');
+        };
+
+        // --- SISTEMA DE LOGIN Y CONTROL DE ACCESO ---
+        function checkSession() {
+            const isSessionActive = localStorage.getItem(DB_PREFIX + 'sessionActive') === 'true';
+            const loginScreen = document.getElementById('login-screen');
+            if (isSessionActive) {
+                loginScreen.classList.add('hidden');
+                loginScreen.classList.add('pointer-events-none');
+            } else {
+                loginScreen.classList.remove('hidden');
+                loginScreen.classList.remove('pointer-events-none');
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value;
+
+            const configUser = localStorage.getItem(DB_PREFIX + 'adminUser') || 'admin';
+            const configPass = localStorage.getItem(DB_PREFIX + 'adminPass') || 'fresh123';
+
+            if (user === configUser && pass === configPass) {
+                localStorage.setItem(DB_PREFIX + 'sessionActive', 'true');
+                showToast("¡Sesión iniciada con éxito!", "success");
+                checkSession();
+            } else {
+                showToast("Usuario o contraseña incorrectos.", "error");
+            }
+        }
+
+        function logoutSession() {
+            localStorage.removeItem(DB_PREFIX + 'sessionActive');
+            checkSession();
+            showToast("Sesión cerrada.", "info");
+        }
+
+        // --- CONFIRMACIÓN CUSTOM ---
+        let confirmPromiseResolve = null;
+        function showCustomConfirm(title, message) {
+            const modal = document.getElementById('custom-confirm-modal');
+            const box = document.getElementById('confirm-box');
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-message').innerText = message;
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+
+            return new Promise((resolve) => {
+                confirmPromiseResolve = resolve;
+            });
+        }
+
+        function closeConfirmModal(result) {
+            const modal = document.getElementById('custom-confirm-modal');
+            const box = document.getElementById('confirm-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+
+            if (confirmPromiseResolve) {
+                confirmPromiseResolve(result);
+                confirmPromiseResolve = null;
+            }
+        }
+
+        document.getElementById('confirm-cancel-btn').addEventListener('click', () => closeConfirmModal(false));
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => closeConfirmModal(true));
+
+        function saveState() {
+            localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+            localStorage.setItem(DB_PREFIX + 'orders', JSON.stringify(orders));
+            localStorage.setItem(DB_PREFIX + 'expenses', JSON.stringify(expenses));
+            localStorage.setItem(DB_PREFIX + 'purchases', JSON.stringify(purchasesHistory));
+            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+            localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
+            localStorage.setItem(DB_PREFIX + 'clients', JSON.stringify(clients));
+            localStorage.setItem(DB_PREFIX + 'cashRegisterState', JSON.stringify(cashRegisterState));
+        }
+
+        function sanitizeLegacyOpenTransactions() {
+            if (cashRegisterState.active) {
+                const openingTimeMs = new Date(cashRegisterState.openingTime).getTime();
+                orders.forEach(o => {
+                    if (o.closed === undefined) {
+                        const orderTimeMs = new Date(o.date).getTime();
+                        o.closed = (!isNaN(orderTimeMs) && orderTimeMs < openingTimeMs);
+                    }
+                });
+                clients.forEach(c => {
+                    c.transactions.forEach(t => {
+                        if (t.closed === undefined) {
+                            const transTimeMs = new Date(t.date).getTime();
+                            t.closed = (!isNaN(transTimeMs) && transTimeMs < openingTimeMs);
+                        }
+                    });
+                });
+                expenses.forEach(e => {
+                    if (e.closed === undefined) {
+                        const expTimeMs = new Date(e.date).getTime();
+                        e.closed = (!isNaN(expTimeMs) && expTimeMs < openingTimeMs);
+                    }
+                });
+            } else {
+                orders.forEach(o => { if (o.closed === undefined) o.closed = true; });
+                clients.forEach(c => { c.transactions.forEach(t => { if (t.closed === undefined) t.closed = true; }); });
+                expenses.forEach(e => { if (e.closed === undefined) e.closed = true; });
+            }
+        }
+
+        async function loadDataFromCloud() {
+            checkSession();
+            try {
+                if (esUrlDummy()) {
+                    console.log("Cargando datos locales de forma segura (Offline).");
+                } else {
+                    const response = await fetch(URL_API);
+                    const data = await response.json();
+                    if(data) {
+                        if(data.products) products = data.products;
+                        if(data.orders) orders = data.orders;
+                        if(data.expenses) expenses = data.expenses;
+                        if(data.purchases) purchasesHistory = data.purchases;
+                        if(data.clients) clients = data.clients;
+                        saveState();
+                    }
+                }
+            } catch (err) {
+                console.warn("Mantenido con base de datos local.");
+            }
+            sanitizeLegacyOpenTransactions();
+            initAdminDashboard();
+            updateCashRegisterUI();
+        }
+
+        function switchTab(t) {
+            document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.add('hidden')); 
+            document.getElementById(`tab-${t}`).classList.remove('hidden');
+            
+            if(t==='pos') { 
+                renderWebOrdersPOS(); renderBillingTables(); renderPOSProducts(); 
+                populatePOSClientSelect();
+                populatePOSTableSelect();
+                updateCashRegisterUI();
+            }
+            if(t==='inventory') renderInventory(); 
+            if(t==='expenses') renderExpenses(); 
+            if(t==='history') renderHistory(); 
+            if(t==='finances') renderFinances();
+            if(t==='clients') {
+                renderClientsList();
+                populatePOSClientSelect();
+            }
+            if(t==='settings') {
+                document.getElementById('settings-phone').value = companyPhone;
+                document.getElementById('settings-nit').value = companyNIT;
+                document.getElementById('settings-main-banner-img').value = mainBannerImg;
+                document.getElementById('settings-address').value = companyAddress;
+                document.getElementById('settings-driver1').value = driverPhone1;
+                document.getElementById('settings-driver2').value = driverPhone2;
+                document.getElementById('settings-driver3').value = driverPhone3;
+                document.getElementById('settings-admin-user').value = adminUser;
+                document.getElementById('settings-admin-pass').value = adminPass;
+                document.getElementById('settings-waiter-pass').value = localStorage.getItem(DB_PREFIX + 'waiterPass') || '1234';
+
+                document.getElementById('settings-nequi').value = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3228586808";
+                document.getElementById('settings-bancolombia').value = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "71300000087977";
+                document.getElementById('settings-announcement').value = localStorage.getItem(DB_PREFIX + 'announcementMessage') || "¡Ingredientes naturales seleccionados diariamente!";
+                document.getElementById('settings-banner-title').value = localStorage.getItem(DB_PREFIX + 'bannerTitle') || "Refresca y endulza tu vida";
+                document.getElementById('settings-banner-desc').value = localStorage.getItem(DB_PREFIX + 'bannerDesc') || "Disfruta de nuestros espectaculares helados soft...";
+            }
+        }
+
+        // ==========================================
+        // 🔒 CONTROL DE APERTURA Y CIERRE DIARIO
+        // ==========================================
+        function updateCashRegisterUI() {
+            const iconContainer = document.getElementById('cash-status-indicator-icon');
+            const title = document.getElementById('cash-status-title');
+            const subtitle = document.getElementById('cash-status-subtitle');
+            const actions = document.getElementById('cash-status-actions');
+            const lockOverlay = document.getElementById('pos-billing-lock-overlay');
+
+            if (cashRegisterState.active) {
+                iconContainer.className = "w-10 h-10 rounded-full flex items-center justify-center text-lg bg-emerald-100 text-emerald-600";
+                iconContainer.innerHTML = '<i class="fa-solid fa-lock-open"></i>';
+                title.innerText = "Caja Abierta";
+                subtitle.innerText = `Turno iniciado el ${cashRegisterState.openingTime} (Base: $${cashRegisterState.openingBalance.toLocaleString()})`;
+                
+                actions.innerHTML = `
+                    <button onclick="openCierreModal()" class="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-1 transition-all">
+                        <i class="fa-solid fa-calculator"></i> Realizar Cierre de Caja
+                    </button>`;
+                lockOverlay.classList.add('hidden');
+            } else {
+                iconContainer.className = "w-10 h-10 rounded-full flex items-center justify-center text-lg bg-rose-100 text-rose-600";
+                iconContainer.innerHTML = '<i class="fa-solid fa-lock"></i>';
+                title.innerText = "Caja Cerrada";
+                subtitle.innerText = "Debes abrir la caja con el monto inicial para poder facturar hoy.";
+                
+                actions.innerHTML = `
+                    <button onclick="openAperturaModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-1 transition-all">
+                        <i class="fa-solid fa-lock-open"></i> Iniciar Apertura de Caja
+                    </button>`;
+                lockOverlay.classList.remove('hidden');
+            }
+        }
+
+        function openAperturaModal() {
+            document.getElementById('apertura-base-amount').value = '';
+            const modal = document.getElementById('apertura-modal');
+            const box = document.getElementById('apertura-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeAperturaModal() {
+            const modal = document.getElementById('apertura-modal');
+            const box = document.getElementById('apertura-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function confirmApertura() {
+            const amount = parseInt(document.getElementById('apertura-base-amount').value);
+            if (isNaN(amount) || amount < 0) {
+                showToast("Por favor ingresa un monto base inicial de caja válido.", "error");
+                return;
+            }
+
+            sanitizeLegacyOpenTransactions();
+
+            cashRegisterState.active = true;
+            cashRegisterState.openingBalance = amount;
+            cashRegisterState.openingTime = new Date().toLocaleString();
+            
+            saveState();
+            closeAperturaModal();
+            updateCashRegisterUI();
+            showToast(`Caja abierta exitosamente con una base de $${amount.toLocaleString()}`, "success");
+        }
+
+        // --- CÁLCULO DE EXPECTATIVAS PARA EL CIERRE ---
+        let expectedCash = 0;
+        let expectedTrans = 0;
+        let expectedNequi = 0;
+        let expectedExpenses = 0;
+        let expectedEfectivoSales = 0;
+        let expectedAbonos = 0;
+        let expectedVentasCredito = 0;
+        let currentCierreCategorias = {};
+        let activeOrdersCount = 0;
+
+        function openCierreModal() {
+            const activeOrders = orders.filter(o => o.closed === false || o.closed === undefined);
+            activeOrdersCount = activeOrders.length;
+
+            expectedEfectivoSales = 0;
+            expectedTrans = 0;
+            expectedNequi = 0;
+            expectedVentasCredito = 0;
+
+            activeOrders.forEach(o => {
+                if (o.payment === 'Efectivo') {
+                    expectedEfectivoSales += o.total;
+                } else if (o.payment === 'Transferencia') {
+                    expectedTrans += o.total;
+                } else if (o.payment === 'Nequi') {
+                    expectedNequi += o.total;
+                } else if (o.payment === 'Crédito') {
+                    expectedVentasCredito += o.total;
+                } else if (o.payment === 'Mixto') {
+                    if (o.mixedDetails) {
+                        expectedEfectivoSales += (o.mixedDetails.cash || 0);
+                        expectedTrans += (o.mixedDetails.trans || 0);
+                        expectedNequi += (o.mixedDetails.nequi || 0);
+                    }
+                }
+            });
+
+            expectedAbonos = 0;
+            clients.forEach(c => {
+                c.transactions.forEach(t => {
+                    if (t.type === 'payment' && (t.closed === false || t.closed === undefined)) {
+                        expectedAbonos += t.amount;
+                    }
+                });
+            });
+
+            expectedExpenses = expenses.filter(e => e.closed === false || e.closed === undefined).reduce((s, e) => s + e.val, 0);
+            expectedCash = cashRegisterState.openingBalance + expectedEfectivoSales + expectedAbonos - expectedExpenses;
+
+            currentCierreCategorias = {};
+            activeOrders.forEach(o => {
+                o.items.forEach(item => {
+                    const prod = products.find(p => p.id === item.id);
+                    const catName = prod ? prod.category : "Heladería General";
+                    if (!currentCierreCategorias[catName]) {
+                        currentCierreCategorias[catName] = { qty: 0, total: 0 };
+                    }
+                    currentCierreCategorias[catName].qty += item.quantity;
+                    currentCierreCategorias[catName].total += (item.price * item.quantity);
+                });
+            });
+
+            document.getElementById('cierre-base-teorica').innerText = `$${cashRegisterState.openingBalance.toLocaleString()}`;
+            document.getElementById('cierre-efectivo-teorico').innerText = `$${expectedEfectivoSales.toLocaleString()}`;
+            document.getElementById('cierre-abonos-teorico').innerText = `$${expectedAbonos.toLocaleString()}`;
+            document.getElementById('cierre-gastos-teorico').innerText = `$${expectedExpenses.toLocaleString()}`;
+
+            document.getElementById('cierre-efectivo-esperado').innerText = `$${expectedCash.toLocaleString()}`;
+            document.getElementById('cierre-trans-esperado').innerText = `$${expectedTrans.toLocaleString()}`;
+            document.getElementById('cierre-nequi-esperado').innerText = `$${expectedNequi.toLocaleString()}`;
+
+            document.getElementById('cierre-credito-total').innerText = `$${expectedVentasCredito.toLocaleString()}`;
+            document.getElementById('cierre-abonos-total').innerText = `$${expectedAbonos.toLocaleString()}`;
+
+            const catContainer = document.getElementById('cierre-categorias-container');
+            catContainer.innerHTML = '';
+            const sortedCats = Object.keys(currentCierreCategorias);
+            if (sortedCats.length === 0) {
+                catContainer.innerHTML = '<p class="text-neutral-400 text-center py-4">No se registraron ventas en este turno.</p>';
+            } else {
+                sortedCats.forEach(cat => {
+                    const data = currentCierreCategorias[cat];
+                    catContainer.innerHTML += `
+                        <div class="flex justify-between items-center text-[11px] py-1 border-b border-neutral-100">
+                            <span class="font-medium text-neutral-600">${cat} (${data.qty} uds)</span>
+                            <span class="font-black text-fresh-purple">$${data.total.toLocaleString()}</span>
+                        </div>`;
+                });
+            }
+
+            document.getElementById('cierre-efectivo-real').value = '';
+            document.getElementById('cierre-trans-real').value = '';
+            document.getElementById('cierre-nequi-real').value = '';
+
+            calculateCierreDiferencias();
+
+            const modal = document.getElementById('cierre-modal');
+            const box = document.getElementById('cierre-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeCierreModal() {
+            const modal = document.getElementById('cierre-modal');
+            const box = document.getElementById('cierre-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function calculateCierreDiferencias() {
+            const realEfectivo = parseInt(document.getElementById('cierre-efectivo-real').value) || 0;
+            const realTrans = parseInt(document.getElementById('cierre-trans-real').value) || 0;
+            const realNequi = parseInt(document.getElementById('cierre-nequi-real').value) || 0;
+
+            const difEfectivo = realEfectivo - expectedCash;
+            const difTrans = realTrans - expectedTrans;
+            const difNequi = realNequi - expectedNequi;
+            const difTotal = difEfectivo + difTrans + difNequi;
+
+            const lblEfectivoDif = document.getElementById('cierre-efectivo-dif');
+            if (difEfectivo === 0) {
+                lblEfectivoDif.innerText = "Cuadrado ($0)";
+                lblEfectivoDif.className = "font-bold text-xs text-emerald-600";
+            } else if (difEfectivo > 0) {
+                lblEfectivoDif.innerText = `Sobra +$${difEfectivo.toLocaleString()}`;
+                lblEfectivoDif.className = "font-bold text-xs text-emerald-600";
+            } else {
+                lblEfectivoDif.innerText = `Falta -$${Math.abs(difEfectivo).toLocaleString()}`;
+                lblEfectivoDif.className = "font-bold text-xs text-red-500";
+            }
+
+            const lblTransDif = document.getElementById('cierre-trans-dif');
+            if (difTrans === 0) {
+                lblTransDif.innerText = "Cuadrado ($0)";
+                lblTransDif.className = "font-bold text-xs text-emerald-600";
+            } else if (difTrans > 0) {
+                lblTransDif.innerText = `Sobra +$${difTrans.toLocaleString()}`;
+                lblTransDif.className = "font-bold text-xs text-emerald-600";
+            } else {
+                lblTransDif.innerText = `Falta -$${Math.abs(difTrans).toLocaleString()}`;
+                lblTransDif.className = "font-bold text-xs text-red-500";
+            }
+
+            const lblNequiDif = document.getElementById('cierre-nequi-dif');
+            if (difNequi === 0) {
+                lblNequiDif.innerText = "Cuadrado ($0)";
+                lblNequiDif.className = "font-bold text-xs text-emerald-600";
+            } else if (difNequi > 0) {
+                lblNequiDif.innerText = `Sobra +$${difNequi.toLocaleString()}`;
+                lblNequiDif.className = "font-bold text-xs text-emerald-600";
+            } else {
+                lblNequiDif.innerText = `Falta -$${Math.abs(difNequi).toLocaleString()}`;
+                lblNequiDif.className = "font-bold text-xs text-red-500";
+            }
+
+            const rbox = document.getElementById('cierre-dif-resumen-box');
+            const valTotal = document.getElementById('cierre-dif-total-val');
+            
+            if (difTotal === 0) {
+                valTotal.innerText = "$0";
+                rbox.className = "p-3 rounded-xl border text-center font-bold text-sm bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner";
+            } else if (difTotal > 0) {
+                valTotal.innerText = `+$${difTotal.toLocaleString()} (Saldo Favorable)`;
+                rbox.className = "p-3 rounded-xl border text-center font-bold text-sm bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner";
+            } else {
+                valTotal.innerText = `-$${Math.abs(difTotal).toLocaleString()} (Faltante)`;
+                rbox.className = "p-3 rounded-xl border text-center font-bold text-sm bg-rose-50 border-rose-200 text-rose-700 shadow-inner";
+            }
+        }
+
+        async function confirmCierreCaja() {
+            const confirm = await showCustomConfirm("Cerrar Turno de Caja", "¿Estás seguro de efectuar el cierre de caja? Esto archivará las ventas de hoy y cerrará tu sesión por seguridad.");
+            if (!confirm) return;
+
+            const realEfectivo = parseInt(document.getElementById('cierre-efectivo-real').value) || 0;
+            const realTrans = parseInt(document.getElementById('cierre-trans-real').value) || 0;
+            const realNequi = parseInt(document.getElementById('cierre-nequi-real').value) || 0;
+
+            const difEfectivo = realEfectivo - expectedCash;
+            const difTrans = realTrans - expectedTrans;
+            const difNequi = realNequi - expectedNequi;
+            const difTotal = difEfectivo + difTrans + difNequi;
+
+            const reportId = "CIE-" + Math.floor(1000 + Math.random() * 9000);
+            const cierreReport = {
+                id: reportId,
+                date: new Date().toLocaleString(),
+                openingTime: cashRegisterState.openingTime,
+                closingTime: new Date().toLocaleString(),
+                openingBalance: cashRegisterState.openingBalance,
+                expectedCash: expectedCash,
+                realCash: realEfectivo,
+                difCash: difEfectivo,
+                expectedTrans: expectedTrans,
+                realTrans: realTrans,
+                difTrans: difTrans,
+                expectedNequi: expectedNequi,
+                realNequi: realNequi,
+                difNequi: difNequi,
+                difTotal: difTotal,
+                abonos: expectedAbonos,
+                ventasCredito: expectedVentasCredito,
+                categorias: currentCierreCategorias
+            };
+
+            let cierres = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios')) || [];
+            cierres.push(cierreReport);
+            localStorage.setItem(DB_PREFIX + 'cierres_diarios', JSON.stringify(cierres));
+
+            sincronizarConGoogle("saveCierre", cierreReport);
+
+            orders.forEach(o => {
+                if (o.closed === false || o.closed === undefined) {
+                    o.closed = true;
+                    o.cierreId = reportId;
+                }
+            });
+
+            clients.forEach(c => {
+                c.transactions.forEach(t => {
+                    if (t.type === 'payment' && (t.closed === false || t.closed === undefined)) {
+                        t.closed = true;
+                        t.cierreId = reportId;
+                    }
+                });
+            });
+
+            expenses.forEach(e => {
+                if (e.closed === false || e.closed === undefined) {
+                    e.closed = true;
+                    e.cierreId = reportId;
+                }
+            });
+
+            cashRegisterState.active = false;
+            cashRegisterState.openingBalance = 0;
+            cashRegisterState.openingTime = null;
+
+            saveState();
+            closeCierreModal();
+            updateCashRegisterUI();
+            
+            printCierreTicket(cierreReport);
+            
+            showToast("Caja cerrada y ventas archivadas.", "success");
+            renderBillingTables();
+            renderHistory();
+            renderFinances();
+
+            logoutSession();
+        }
+
+        function printCierreTicket(report) {
+            const printArea = document.getElementById('print-receipt-area');
+            let catRows = Object.keys(report.categorias).map(cat => `
+                <tr style="border-bottom: 1px dashed #ddd;">
+                    <td style="padding: 4px 0; font-family: monospace; font-size: 11px;">${cat}</td>
+                    <td style="padding: 4px 0; text-align: center; font-family: monospace; font-size: 11px;">${report.categorias[cat].qty} uds</td>
+                    <td style="padding: 4px 0; text-align: right; font-family: monospace; font-size: 11px;">$${report.categorias[cat].total.toLocaleString()}</td>
+                </tr>
+            `).join('');
+
+            printArea.classList.remove('hidden');
+            printArea.innerHTML = `
+                <div style="width: 100%; max-width: 80mm; font-family: monospace; color: black; background: white; padding: 5px;">
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <h2 style="font-size: 16px; font-weight: bold; margin: 0; text-transform: uppercase;">Punto Fresh</h2>
+                        <p style="font-size: 10px; margin: 2px 0;">NIT: ${companyNIT}</p>
+                        <p style="font-size: 10px; margin: 2px 0;">${companyAddress}</p>
+                        <div style="border-bottom: 2px dashed black; margin: 10px 0;"></div>
+                        <h3 style="font-size: 13px; font-weight: bold; margin: 0;">REPORTE DE ARQUEO DIARIO</h3>
+                        <p style="font-size: 11px; margin: 2px 0;">ID CIERRE: #${report.id}</p>
+                    </div>
+
+                    <div style="font-size: 11px; margin-bottom: 10px; line-height: 1.4;">
+                        <p style="margin: 2px 0;"><strong>Apertura:</strong> ${report.openingTime}</p>
+                        <p style="margin: 2px 0;"><strong>Cierre:</strong> ${report.closingTime}</p>
+                    </div>
+
+                    <div style="border-top: 1px solid black; border-bottom: 1px solid black; padding: 5px 0; margin-bottom: 10px; font-size: 11px;">
+                        <table style="width: 100%;">
+                            <tr><td>Base Caja Inicial:</td><td style="text-align:right;">$${report.openingBalance.toLocaleString()}</td></tr>
+                            <tr><td>Abonos Clientes:</td><td style="text-align:right; color:green;">+$${report.abonos.toLocaleString()}</td></tr>
+                            <tr><td>Ventas Crédito (Infor.):</td><td style="text-align:right;">$${report.ventasCredito.toLocaleString()}</td></tr>
+                        </table>
+                    </div>
+
+                    <h4 style="font-size: 11px; margin: 5px 0; border-bottom: 1px dashed black;">CUADRE DE CAJA DIARIO</h4>
+                    <table style="width: 100%; font-size: 10px; margin-bottom: 10px; border-collapse: collapse;">
+                        <tr style="font-weight:bold; border-bottom: 1px solid black;">
+                            <td>Vía Pago</td>
+                            <td style="text-align:right;">Teórico</td>
+                            <td style="text-align:right;">Real</td>
+                            <td style="text-align:right;">Diferencia</td>
+                        </tr>
+                        <tr>
+                            <td>Efectivo:</td>
+                            <td style="text-align:right;">$${report.expectedCash.toLocaleString()}</td>
+                            <td style="text-align:right;">$${report.realCash.toLocaleString()}</td>
+                            <td style="text-align:right; font-weight:bold;">$${report.difCash.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td>Transf:</td>
+                            <td style="text-align:right;">$${report.expectedTrans.toLocaleString()}</td>
+                            <td style="text-align:right;">$${report.realTrans.toLocaleString()}</td>
+                            <td style="text-align:right; font-weight:bold;">$${report.difTrans.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td>Nequi:</td>
+                            <td style="text-align:right;">$${report.expectedNequi.toLocaleString()}</td>
+                            <td style="text-align:right;">$${report.realNequi.toLocaleString()}</td>
+                            <td style="text-align:right; font-weight:bold;">$${report.difNequi.toLocaleString()}</td>
+                        </tr>
+                        <tr style="font-weight:bold; border-top:1px dashed black;">
+                            <td colspan="3">Descuadre Neto:</td>
+                            <td style="text-align:right;">$${report.difTotal.toLocaleString()}</td>
+                        </tr>
+                    </table>
+
+                    <h4 style="font-size: 11px; margin: 5px 0; border-bottom: 1px dashed black;">VENTAS POR CATEGORÍA</h4>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                        <tbody>
+                            ${catRows || '<tr><td colspan="3" style="text-align:center; font-size:10px;">Sin transacciones</td></tr>'}
+                        </tbody>
+                    </table>
+
+                    <div style="text-align: center; font-size: 10px; margin-top: 20px; border-top: 1px solid #aaa; padding-top: 8px;">
+                        <p style="margin: 2px 0;">Punto Fresh - Auditoría Interna</p>
+                    </div>
+                </div>`;
+
+            document.body.classList.add('printing-mode');
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('printing-mode');
+                printArea.classList.add('hidden');
+            }, 300);
+        }
+
+        // ==========================================
+        // 💵 CONTROL DE FACTURAS Y PEDIDOS WEB
+        // ==========================================
+        function renderWebOrdersPOS() {
+            const container = document.getElementById('pos-web-orders-container');
+            if(!container) return; container.innerHTML = '';
+            if(pendingWebOrders.length === 0) return;
+
+            let html = `
+                <div class="bg-fresh-lightPurple border border-fresh-pink/30 p-4 rounded-2xl shadow-sm mb-4">
+                    <h3 class="font-serif text-base font-bold text-fresh-purple mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-bell text-fresh-pink animate-bounce"></i> Pedidos Digitales por Confirmar (${pendingWebOrders.length})
+                    </h3>
+                    <div class="space-y-3">`;
+
+            pendingWebOrders.forEach((o, idx) => {
+                let listStr = o.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+                html += `
+                    <div class="bg-white p-3 rounded-xl border border-fresh-pink/10 flex flex-col sm:flex-row justify-between gap-3 text-xs">
+                        <div>
+                            <p class="font-bold text-fresh-purple text-sm">${o.clientName} <span class="bg-fresh-purple text-white text-[9px] px-2 py-0.5 rounded ml-1 font-bold uppercase">${o.delivery}</span></p>
+                            <p class="text-[11px] text-neutral-600 mt-1"><i class="fa-solid fa-phone text-fresh-pink mr-1"></i> ${o.clientPhone}</p>
+                            <p class="text-[11px] font-bold text-neutral-500 mt-1"><i class="fa-solid fa-ice-cream text-fresh-pink mr-1"></i> ${listStr}</p>
+                            <p class="text-xs font-black text-emerald-600 mt-1">Total: $${o.total.toLocaleString()} (${o.payment})</p>
+                        </div>
+                        <div class="flex sm:flex-col gap-1.5 justify-center">
+                            <button onclick="confirmWebOrder(${idx})" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-700 transition text-xs">Aprobar</button>
+                            <button onclick="rejectWebOrder(${idx})" class="bg-red-50 text-red-600 font-bold px-4 py-2 rounded-xl hover:bg-red-100 transition text-xs">Rechazar</button>
+                        </div>
+                    </div>`;
+            });
+            html += `</div></div>`;
+            container.innerHTML = html;
+        }
+
+        function confirmWebOrder(idx) {
+            let order = pendingWebOrders[idx];
+            let itemsToKitchen = order.items.map(i => ({
+                id: i.id, name: i.name, price: i.price, quantity: i.quantity, status: 'Pendiente', note: order.comment || ''
+            }));
+            if(order.delivery === 'Domicilio') {
+                itemsToKitchen.push({ id: "ENVIO", name: "🛵 Costo Envío", price: 2000, quantity: 1, status: 'Listo', note: '' });
+            }
+            let newMesa = {
+                id: order.id,
+                name: order.delivery === 'Domicilio' ? "Domicilio - " + order.clientName : "Llevar - " + order.clientName,
+                label: (order.delivery==='Domicilio'?'🛵 ':'🛍️ ') + order.clientName,
+                status: 'Ocupada',
+                items: itemsToKitchen,
+                waiter: 'App Cliente'
+            };
+            mesas.push(newMesa);
+            pendingWebOrders.splice(idx, 1);
+            saveState();
+            renderWebOrdersPOS(); renderBillingTables();
+            showToast("Pedido aprobado y enviado a cocina.", "success");
+        }
+
+        async function rejectWebOrder(idx) {
+            const confirmReject = await showCustomConfirm("Rechazar pedido", "¿Estás seguro de rechazar esta orden?");
+            if (confirmReject) {
+                pendingWebOrders.splice(idx, 1);
+                saveState(); renderWebOrdersPOS();
+                showToast("Orden rechazada.", "info");
+            }
+        }
+
+        function renderBillingTables() {
+            const container = document.getElementById('pos-billing-tables-grid');
+            container.innerHTML = '';
+            const billing = mesas.filter(m => m.items.length > 0);
+            if(billing.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center py-6 text-neutral-400 text-xs">Sin comandas activas. Toma una orden rápida de helados.</div>`;
+                return;
+            }
+            billing.forEach(m => {
+                let total = m.items.reduce((s,i) => s + (i.price * i.quantity), 0);
+                container.innerHTML += `
+                    <button onclick="selectPOSMesa('${m.id}')" class="p-4 rounded-xl border border-fresh-pink/10 text-left bg-neutral-50 hover:bg-neutral-100 flex flex-col justify-between h-24 shadow-sm relative transition duration-200 active:scale-95">
+                        <div class="w-full">
+                            <span class="text-xs uppercase font-extrabold text-fresh-purple truncate block w-full">${m.label}</span>
+                            <span class="text-[9px] text-neutral-400 block mt-0.5">Mesero: ${m.waiter || 'Caja'}</span>
+                        </div>
+                        <span class="text-xs font-black text-fresh-purple mt-1 block">$${total.toLocaleString()}</span>
+                    </button>`;
+            });
+        }
+
+        function selectPOSMesa(id) {
+            const m = mesas.find(x => x.id === id);
+            document.getElementById('pos-selected-table-id').value = m.id;
+            document.getElementById('pos-client-name').value = m.label;
+            
+            // Sincronizar el dropdown selector de mesa
+            const tableSelect = document.getElementById('pos-table-select');
+            if (tableSelect) tableSelect.value = m.id;
+
+            selectedTableWaiter = m.waiter || "Caja";
+            document.getElementById('pos-waiter-indicator').innerHTML = `Atribución: <span class="text-fresh-purple font-extrabold">${selectedTableWaiter}</span>`;
+            posCart = [];
+            m.items.forEach(i => {
+                posCart.push({ id: i.id, name: i.name, price: i.price, quantity: i.quantity });
+            });
+            updatePOSCartUI();
+        }
+
+        function renderPOSProducts() {
+            const grid = document.getElementById('pos-grid'); grid.innerHTML = '';
+            const search = document.getElementById('pos-search').value.toLowerCase();
+            let filtered = products.filter(p => p.name.toLowerCase().includes(search) || p.category.toLowerCase().includes(search));
+            filtered.forEach(p => {
+                grid.innerHTML += `<div onclick="addToPOS('${p.id}')" class="bg-neutral-50 p-2.5 rounded-xl border border-fresh-pink/10 cursor-pointer hover:bg-neutral-100 flex flex-col justify-between h-20 shadow-sm transition active:scale-95"><p class="font-bold text-[11px] text-fresh-purple line-clamp-2 leading-tight">${p.name}</p><div class="flex justify-between items-end mt-1"><span class="text-[8px] bg-fresh-purple text-white px-1 py-0.5 rounded">Menú</span><p class="font-black text-xs text-fresh-purple">$${p.price.toLocaleString()}</p></div></div>`;
+            }); updatePOSCartUI();
+        }
+
+        function searchPOSProducts() { renderPOSProducts(); }
+
+        function addToPOS(id) {
+            const p = products.find(x => x.id === id);
+            let exist = posCart.find(i => i.id === id);
+            if (exist) exist.quantity++;
+            else posCart.push({ id: p.id, name: p.name, price: p.price, quantity: 1 });
+            updatePOSCartUI();
+        }
+
+        function updatePOSCartQty(idx, delta) {
+            posCart[idx].quantity += delta;
+            if(posCart[idx].quantity <= 0) posCart.splice(idx, 1);
+            updatePOSCartUI();
+        }
+
+        function updatePOSCartUI() {
+            const container = document.getElementById('pos-cart-items'); container.innerHTML = '';
+            let total = 0;
+            if(posCart.length === 0) {
+                container.innerHTML = `<p class="text-center text-xs text-neutral-400 py-8">Selecciona una mesa o agrega artículos rápidos.</p>`;
+                document.getElementById('pos-total').innerText = "$0";
+                calculateMixedTotals();
+                return;
+            }
+            posCart.forEach((item, idx) => {
+                total += item.price * item.quantity;
+                container.innerHTML += `
+                    <div class="flex justify-between items-center p-2.5 bg-neutral-50 rounded-xl border border-fresh-pink/10 text-xs">
+                        <span><b>${item.quantity}x</b> ${item.name}</span>
+                        <div class="flex items-center gap-2">
+                            <p class="font-black text-fresh-purple">$${(item.price*item.quantity).toLocaleString()}</p>
+                            <button onclick="updatePOSCartQty(${idx}, -1)" class="text-red-500 font-bold px-2 hover:bg-red-50 py-0.5 rounded">X</button>
+                        </div>
+                    </div>`;
+            });
+            document.getElementById('pos-total').innerText = `$${total.toLocaleString()}`;
+            calculateMixedTotals();
+        }
+
+        function clearPOSCart() {
+            posCart = []; selectedTableWaiter = "";
+            document.getElementById('pos-selected-table-id').value = '';
+            document.getElementById('pos-client-select').value = '';
+            
+            // Limpiar selector de mesa
+            const tableSelect = document.getElementById('pos-table-select');
+            if (tableSelect) tableSelect.value = '';
+
+            document.getElementById('pos-client-name').value = '';
+            document.getElementById('pos-client-phone').value = '';
+            document.getElementById('pos-client-address').value = '';
+            document.getElementById('pos-client-comment').value = '';
+            document.getElementById('pos-cash-received').value = '';
+            document.getElementById('pos-change-amount').innerText = '$0';
+            document.getElementById('pos-mixed-cash').value = '0';
+            document.getElementById('pos-mixed-trans').value = '0';
+            document.getElementById('pos-mixed-nequi').value = '0';
+            document.getElementById('pos-waiter-indicator').innerHTML = `Atiende: <span class="text-fresh-purple font-bold">Caja</span>`;
+            updatePOSCartUI();
+        }
+
+        function setPOSPayment(m) {
+            posPayment = m;
+            document.getElementById('pos-pay-cash').className = m === 'Efectivo' ? "py-2.5 rounded-xl font-bold text-[9px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark";
+            document.getElementById('pos-pay-transfer').className = m === 'Transferencia' ? "py-2.5 rounded-xl font-bold text-[9px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark";
+            document.getElementById('pos-pay-nequi').className = m === 'Nequi' ? "py-2.5 rounded-xl font-bold text-[9px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark";
+            document.getElementById('pos-pay-mixed').className = m === 'Mixto' ? "py-2.5 rounded-xl font-bold text-[9px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark";
+            document.getElementById('pos-pay-credit').className = m === 'Crédito' ? "py-2.5 rounded-xl font-bold text-[9px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[9px] bg-neutral-100 text-fresh-dark";
+
+            const mixedPanel = document.getElementById('pos-mixed-panel');
+            const cashPanel = document.getElementById('pos-normal-cash-panel');
+
+            if(m === 'Mixto') {
+                mixedPanel.classList.remove('hidden');
+                cashPanel.classList.add('hidden');
+                calculateMixedTotals();
+            } else if (m === 'Efectivo') {
+                mixedPanel.classList.add('hidden');
+                cashPanel.classList.remove('hidden');
+                calculatePOSChange();
+            } else {
+                mixedPanel.classList.add('hidden');
+                cashPanel.classList.add('hidden');
+            }
+        }
+
+        function calculateMixedTotals() {
+            const totalStr = document.getElementById('pos-total').innerText.replace(/[^0-9]/g, '');
+            const total = parseInt(totalStr) || 0;
+
+            const mCash = parseInt(document.getElementById('pos-mixed-cash').value) || 0;
+            const mTrans = parseInt(document.getElementById('pos-mixed-trans').value) || 0;
+            const mNequi = parseInt(document.getElementById('pos-mixed-nequi').value) || 0;
+
+            const sumPaid = mCash + mTrans + mNequi;
+            const pending = Math.max(0, total - sumPaid);
+
+            document.getElementById('pos-mixed-paid-lbl').innerText = `$${sumPaid.toLocaleString()}`;
+            document.getElementById('pos-mixed-pending-lbl').innerText = `$${pending.toLocaleString()}`;
+
+            if(pending === 0 && sumPaid > 0) {
+                document.getElementById('pos-mixed-pending-lbl').className = "text-emerald-600 font-black";
+            } else {
+                document.getElementById('pos-mixed-pending-lbl').className = "text-rose-500 font-black";
+            }
+        }
+
+        function applyPOSClientData() {
+            const selectId = document.getElementById('pos-client-select').value;
+            if(!selectId) return;
+            const client = clients.find(c => c.id === selectId);
+            if(client) {
+                document.getElementById('pos-client-name').value = client.name;
+                document.getElementById('pos-client-phone').value = client.phone;
+                document.getElementById('pos-client-address').value = client.address;
+            }
+        }
+
+        function processPOSSale(imprimir = true) {
+            if(!cashRegisterState.active) {
+                showToast("Debes abrir la caja diaria para registrar ventas.", "error");
+                return;
+            }
+            if(!posCart.length) {
+                showToast("No hay artículos en la comanda.", "error");
+                return;
+            }
+            let total = posCart.reduce((s,i) => s + (i.price * i.quantity), 0);
+            const activeTableId = document.getElementById('pos-selected-table-id').value;
+            const finalName = document.getElementById('pos-client-name').value || "Cliente Mostrador";
+            const finalComment = document.getElementById('pos-client-comment').value || "";
+            let idVenta = "FAC-" + Math.floor(1000 + Math.random() * 9000);
+            const finalWaiter = selectedTableWaiter || "Caja/Mostrador";
+
+            let mixedDetails = null;
+            if(posPayment === 'Mixto') {
+                let mCash = parseInt(document.getElementById('pos-mixed-cash').value) || 0;
+                let mTrans = parseInt(document.getElementById('pos-mixed-trans').value) || 0;
+                let mNequi = parseInt(document.getElementById('pos-mixed-nequi').value) || 0;
+
+                const sumPaid = mCash + mTrans + mNequi;
+                if(sumPaid < total) {
+                    showToast("Los montos ingresados en el pago mixto no cubren la cuenta.", "error");
+                    return;
+                }
+                
+                const change = sumPaid - total;
+                if(change > 0) {
+                    mCash = Math.max(0, mCash - change);
+                }
+
+                mixedDetails = {
+                    cash: mCash,
+                    trans: mTrans,
+                    nequi: mNequi
+                };
+            }
+
+            let selectedClientId = document.getElementById('pos-client-select').value;
+            let clientForCredit = null;
+
+            if (posPayment === 'Crédito') {
+                if (!selectedClientId) {
+                    showToast("Debes seleccionar un cliente del directorio para vender a Crédito.", "error");
+                    return;
+                }
+                clientForCredit = clients.find(x => x.id === selectedClientId);
+                if (!clientForCredit) return;
+                
+                let currentBalance = clientForCredit.transactions.reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+                if (currentBalance + total > clientForCredit.maxCredit) {
+                    showToast(`El monto supera el cupo de crédito ($${clientForCredit.maxCredit.toLocaleString()}).`, "error");
+                    return;
+                }
+            }
+
+            let newOrder = {
+                id: idVenta,
+                date: new Date().toLocaleString(),
+                clientName: finalName,
+                clientPhone: document.getElementById('pos-client-phone').value || "-",
+                delivery: activeTableId ? "Mesa" : "Salón",
+                mesa_o_direccion: activeTableId ? `Mesa/Comanda: ${finalName}` : "Mostrador / Heladería",
+                payment: posPayment,
+                mixedDetails: mixedDetails,
+                items: [...posCart],
+                total: total,
+                status: 'Pagado',
+                prepared: 'Entregado',
+                type: 'Caja',
+                waiterName: finalWaiter,
+                comment: finalComment,
+                closed: false 
+            };
+
+            orders.push(newOrder);
+            sincronizarConGoogle("saveOrder", newOrder);
+
+            if (posPayment === 'Crédito' && clientForCredit) {
+                clientForCredit.transactions.push({
+                    id: idVenta,
+                    date: new Date().toLocaleString(),
+                    type: 'invoice',
+                    total: total,
+                    items: newOrder.items.map(i => `${i.quantity}x ${i.name}`),
+                    closed: false 
+                });
+            }
+
+            if (imprimir) {
+                generateAndPrintThermalTicket(newOrder);
+            }
+
+            if (activeTableId) {
+                const table = mesas.find(m => m.id === activeTableId);
+                if (table) {
+                    table.items = [];
+                    table.status = 'Libre';
+                    table.label = table.name;
+                    table.waiter = "";
+                }
+            }
+
+            posCart.forEach(item => {
+                let p = products.find(x => x.id === item.id);
+                if(p) {
+                    p.sales = (p.sales || 0) + item.quantity;
+                    p.stock = Math.max(0, p.stock - item.quantity);
+                }
+            });
+            sincronizarConGoogle("syncProducts", products);
+
+            saveState(); clearPOSCart(); renderBillingTables(); renderHistory(); renderFinances();
+            if (posPayment === 'Crédito') renderClientsList();
+            showToast("Venta facturada correctamente.", "success");
+        }
+
+        function printCurrentPOS() {
+            if(!posCart.length) {
+                showToast("No hay artículos para imprimir.", "error");
+                return;
+            }
+            const activeTableId = document.getElementById('pos-selected-table-id').value;
+            const finalName = document.getElementById('pos-client-name').value || "Cliente Mostrador";
+            const finalComment = document.getElementById('pos-client-comment').value || "";
+            let dummyOrder = {
+                id: "PRE-FAC",
+                date: new Date().toLocaleString(),
+                clientName: finalName,
+                clientPhone: document.getElementById('pos-client-phone').value || "-",
+                delivery: activeTableId ? "Mesa" : "Salón",
+                mesa_o_direccion: activeTableId ? `Mesa/Comanda: ${finalName}` : "Mostrador / Heladería",
+                payment: posPayment,
+                items: [...posCart],
+                total: posCart.reduce((s,i) => s + (i.price * i.quantity), 0),
+                waiterName: selectedTableWaiter || "Caja/Mostrador",
+                comment: finalComment
+            };
+            generateAndPrintThermalTicket(dummyOrder);
+        }
+
+        function generateAndPrintThermalTicket(order) {
+            const printArea = document.getElementById('print-receipt-area');
+            if (!printArea) return;
+            
+            let itemRows = order.items.map(i => `
+                <tr style="border-bottom: 1px dashed #ddd;">
+                    <td style="padding: 4px 0; font-family: monospace; font-size: 11px;">${i.quantity}x ${i.name}</td>
+                    <td style="padding: 4px 0; text-align: right; font-family: monospace; font-size: 11px;">$${(i.price * i.quantity).toLocaleString()}</td>
+                </tr>
+            `).join('');
+
+            printArea.classList.remove('hidden');
+            printArea.innerHTML = `
+                <div style="width: 100%; max-width: 80mm; font-family: monospace; color: black; background: white; padding: 5px;">
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <h2 style="font-size: 16px; font-weight: bold; margin: 0; text-transform: uppercase;">Punto Fresh</h2>
+                        <p style="font-size: 10px; margin: 2px 0;">NIT: ${companyNIT}</p>
+                        <p style="font-size: 10px; margin: 2px 0;">${companyAddress}</p>
+                        <p style="font-size: 10px; margin: 2px 0;">Tel: ${companyPhone}</p>
+                        <div style="border-bottom: 2px dashed black; margin: 10px 0;"></div>
+                        <h3 style="font-size: 12px; font-weight: bold; margin: 0;">COMPROBANTE DE PAGO</h3>
+                        <p style="font-size: 11px; margin: 2px 0;">REF: ${order.id}</p>
+                    </div>
+
+                    <div style="font-size: 11px; margin-bottom: 10px; line-height: 1.4;">
+                        <p style="margin: 2px 0;"><strong>Fecha:</strong> ${order.date}</p>
+                        <p style="margin: 2px 0;"><strong>Cliente:</strong> ${order.clientName}</p>
+                        <p style="margin: 2px 0;"><strong>Origen:</strong> ${order.mesa_o_direccion}</p>
+                        <p style="margin: 2px 0;"><strong>Pago:</strong> ${order.payment}</p>
+                        ${order.comment ? `<p style="margin: 2px 0;"><strong>Nota:</strong> ${order.comment}</p>` : ''}
+                    </div>
+
+                    <h4 style="font-size: 11px; margin: 5px 0; border-bottom: 1px dashed black;">DETALLE DEL PEDIDO</h4>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                        <tbody>
+                            ${itemRows}
+                        </tbody>
+                    </table>
+
+                    <div style="border-top: 1px dashed black; padding-top: 5px; font-size: 12px; font-weight: bold; text-align: right;">
+                        TOTAL: $${order.total.toLocaleString()}
+                    </div>
+
+                    <div style="text-align: center; font-size: 10px; margin-top: 20px; border-top: 1px solid #aaa; padding-top: 8px;">
+                        <p style="margin: 2px 0;">Atendido por: ${order.waiterName || 'Caja'}</p>
+                        <p style="margin: 2px 0; font-style: italic;">¡Gracias por su compra!</p>
+                    </div>
+                </div>`;
+
+            document.body.classList.add('printing-mode');
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('printing-mode');
+                printArea.classList.add('hidden');
+            }, 300);
+        }
+
+        // =========================================================================
+        // 🛠️ SECCIÓN ADICIONADA: Funciones de Mesa y Cocina de mostrador desde Caja
+        // =========================================================================
+        function populatePOSTableSelect() {
+            const select = document.getElementById('pos-table-select');
+            if(!select) return;
+            select.innerHTML = '<option value="">-- Sin Mesa / Venta Rápida --</option>';
+            mesas.forEach(m => {
+                let statusLabel = m.status === 'Ocupada' ? ' (Ocupada)' : (m.status === 'Cuenta' ? ' (Pide Cuenta)' : ' (Libre)');
+                select.innerHTML += `<option value="${m.id}">${m.name}${statusLabel}</option>`;
+            });
+            const activeTableId = document.getElementById('pos-selected-table-id').value;
+            if(activeTableId) select.value = activeTableId;
+        }
+
+        function applyPOSTableSelect() {
+            const selectId = document.getElementById('pos-table-select').value;
+            if(!selectId) {
+                document.getElementById('pos-selected-table-id').value = '';
+                document.getElementById('pos-client-name').value = '';
+                document.getElementById('pos-waiter-indicator').innerHTML = `Atiende: <span class="text-fresh-purple font-bold">Caja</span>`;
+                posCart = [];
+                updatePOSCartUI();
+                return;
+            }
+            selectPOSMesa(selectId);
+        }
+
+        function sendPOSOrderToKitchen() {
+            if(!posCart.length) {
+                showToast("No hay artículos en la comanda para enviar a la cocina.", "error");
+                return;
+            }
+            const tableId = document.getElementById('pos-selected-table-id').value || document.getElementById('pos-table-select').value;
+            if (!tableId) {
+                showToast("Debes seleccionar una Mesa para enviar el pedido a la cocina.", "error");
+                return;
+            }
+            const table = mesas.find(m => m.id === tableId);
+            if (!table) {
+                showToast("Mesa no encontrada.", "error");
+                return;
+            }
+
+            let updatedItems = [];
+            const currentItems = table.items || [];
+            
+            posCart.forEach(cartItem => {
+                const existingItem = currentItems.find(ci => ci.id === cartItem.id);
+                if (existingItem) {
+                    updatedItems.push({
+                        id: cartItem.id,
+                        name: cartItem.name,
+                        price: cartItem.price,
+                        quantity: cartItem.quantity,
+                        status: existingItem.status || 'Pendiente',
+                        note: existingItem.note || 'Pedido desde Caja'
+                    });
+                } else {
+                    updatedItems.push({
+                        id: cartItem.id,
+                        name: cartItem.name,
+                        price: cartItem.price,
+                        quantity: cartItem.quantity,
+                        status: 'Pendiente',
+                        note: 'Pedido desde Caja'
+                    });
+                }
+            });
+
+            table.items = updatedItems;
+            table.status = 'Ocupada';
+            table.waiter = 'Caja';
+            table.label = document.getElementById('pos-client-name').value || table.name;
+
+            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+            window.dispatchEvent(new Event('storage'));
+
+            showToast(`Pedido de la ${table.name} enviado a cocina con éxito.`, "success");
+            clearPOSCart();
+            renderBillingTables();
+            populatePOSTableSelect();
+        }
+
+        // --- CLIENTES Y CRÉDITO (ESTADO DE CUENTA) ---
+        function saveNewClient() {
+            const name = document.getElementById('new-client-name').value.trim();
+            const phone = document.getElementById('new-client-phone').value.trim();
+            const maxCredit = parseInt(document.getElementById('new-client-limit').value);
+            const address = document.getElementById('new-client-address').value.trim();
+
+            if(!name || !phone || isNaN(maxCredit)) {
+                showToast("Ingresa nombre, celular y cupo máximo de crédito.", "error");
+                return;
+            }
+
+            const newClient = {
+                id: "CLI-" + Math.floor(100 + Math.random() * 900),
+                name: name,
+                phone: phone,
+                address: address || "No registrada",
+                maxCredit: maxCredit,
+                transactions: []
+            };
+
+            clients.push(newClient);
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+            
+            document.getElementById('new-client-name').value = '';
+            document.getElementById('new-client-phone').value = '';
+            document.getElementById('new-client-limit').value = '';
+            document.getElementById('new-client-address').value = '';
+
+            renderClientsList();
+            populatePOSClientSelect();
+            showToast("Perfil de crédito del cliente activado.", "success");
+        }
+
+        function renderClientsList() {
+            const container = document.getElementById('clients-list-container');
+            if (!container) return;
+            const search = document.getElementById('search-client-input').value.toLowerCase();
+            container.innerHTML = '';
+            
+            let filtered = clients.filter(c => c.name.toLowerCase().includes(search) || c.phone.includes(search));
+            
+            if(filtered.length === 0) {
+                container.innerHTML = `<p class="text-xs text-neutral-400 text-center py-4">Sin coincidencias.</p>`;
+                return;
+            }
+
+            filtered.forEach(c => {
+                let balance = c.transactions.reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+                container.innerHTML += `
+                    <button onclick="selectClient('${c.id}')" class="w-full p-3 rounded-xl border border-fresh-pink/20 text-left bg-neutral-50 hover:bg-fresh-lightPurple flex justify-between items-center transition-all shadow-sm">
+                        <div class="overflow-hidden">
+                            <p class="font-bold text-fresh-purple text-xs truncate uppercase">${c.name}</p>
+                            <p class="text-[10px] text-neutral-500"><i class="fa-solid fa-phone"></i> ${c.phone}</p>
+                        </div>
+                        <div class="text-right shrink-0 ml-2">
+                            <p class="text-[9px] font-bold text-neutral-400 uppercase">Deuda</p>
+                            <p class="font-black text-xs ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}">$${balance.toLocaleString()}</p>
+                        </div>
+                    </button>`;
+            });
+        }
+
+        function populatePOSClientSelect() {
+            const select = document.getElementById('pos-client-select');
+            if(!select) return;
+            select.innerHTML = '<option value="">-- Cliente Casual / Mostrador --</option>';
+            clients.forEach(c => {
+                select.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+            });
+        }
+
+        function selectClient(id) {
+            currentSelectedClient = clients.find(c => c.id === id);
+            document.getElementById('client-empty-state').classList.add('hidden');
+            const panel = document.getElementById('client-statement-panel');
+            panel.classList.remove('hidden');
+            setTimeout(() => { panel.classList.remove('opacity-0'); }, 50);
+            renderAccountStatement();
+        }
+
+        function renderAccountStatement() {
+            if(!currentSelectedClient) return;
+            const c = currentSelectedClient;
+            document.getElementById('stmt-name').innerText = c.name;
+            document.getElementById('stmt-phone').innerText = c.phone;
+            document.getElementById('stmt-address').innerText = c.address;
+            document.getElementById('stmt-limit').innerText = `$${c.maxCredit.toLocaleString()}`;
+            
+            let runningBalance = 0;
+            const tbody = document.getElementById('stmt-transactions-rows');
+            tbody.innerHTML = '';
+            
+            if (c.transactions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-xs text-neutral-400">Sin movimientos previos.</td></tr>`;
+            } else {
+                c.transactions.forEach(t => {
+                    let cargo = t.type === 'invoice' ? t.total : 0;
+                    let abono = t.type === 'payment' ? t.amount : 0;
+                    runningBalance += (cargo - abono);
+                    
+                    let detalleHtml = t.type === 'invoice' ? 
+                        `<span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold border border-red-100">Factura</span><br><span class="text-[9px] text-neutral-500 block mt-1">${t.items ? t.items.join(', ') : 'Venta general'}</span>` : 
+                        `<span class="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold border border-emerald-100">Abono Recibido</span>`;
+
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-neutral-50">
+                            <td class="p-3 text-[10px] text-neutral-500">${t.date.split(',')[0]}</td>
+                            <td class="p-3">
+                                <span class="font-bold text-fresh-purple block">${t.id}</span>
+                                ${detalleHtml}
+                            </td>
+                            <td class="p-3 text-right font-black text-red-500">${cargo > 0 ? '$'+cargo.toLocaleString() : '-'}</td>
+                            <td class="p-3 text-right font-black text-emerald-600">${abono > 0 ? '$'+abono.toLocaleString() : '-'}</td>
+                            <td class="p-3 text-right font-extrabold text-fresh-purple">$${runningBalance.toLocaleString()}</td>
+                        </tr>`;
+                });
+            }
+            
+            document.getElementById('stmt-balance').innerText = `$${runningBalance.toLocaleString()}`;
+            let available = c.maxCredit - runningBalance;
+            document.getElementById('stmt-available').innerText = `$${available.toLocaleString()}`;
+        }
+
+        function openAbonoModal() {
+            if(!currentSelectedClient) return;
+            document.getElementById('abono-client-name').innerText = currentSelectedClient.name;
+            document.getElementById('abono-amount').value = '';
+            
+            const modal = document.getElementById('abono-modal');
+            const box = document.getElementById('abono-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeAbonoModal() {
+            const modal = document.getElementById('abono-modal');
+            const box = document.getElementById('abono-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function processAbono() {
+            if(!currentSelectedClient) return;
+            let amount = parseInt(document.getElementById('abono-amount').value);
+            if(isNaN(amount) || amount <= 0) {
+                showToast("Ingresa un monto de abono válido.", "error");
+                return;
+            }
+            let currentBalance = currentSelectedClient.transactions.reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+            if (amount > currentBalance) {
+                showToast("El abono no puede superar la deuda total.", "error");
+                return;
+            }
+
+            currentSelectedClient.transactions.push({
+                id: "ABO-" + Math.floor(10000 + Math.random() * 90000),
+                type: 'payment',
+                date: new Date().toLocaleString(),
+                amount: amount,
+                closed: false 
+            });
+
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+            renderAccountStatement();
+            renderClientsList();
+            closeAbonoModal();
+            showToast("Abono procesado con éxito.", "success");
+        }
+
+        async function settleClientBalance() {
+            if(!currentSelectedClient) return;
+            let currentBalance = currentSelectedClient.transactions.reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+            if (currentBalance <= 0) {
+                showToast("La cuenta se encuentra al día.", "info");
+                return;
+            }
+
+            const confirm = await showCustomConfirm("Liquidar Deuda", `¿Deseas liquidar el saldo total de $${currentBalance.toLocaleString()}?`);
+            if (confirm) {
+                currentSelectedClient.transactions.push({
+                    id: "ABO-" + Math.floor(10000 + Math.random() * 90000),
+                    type: 'payment',
+                    date: new Date().toLocaleString(),
+                    amount: currentBalance,
+                    note: "Liquidación completa",
+                    closed: false 
+                });
+                saveState();
+                sincronizarConGoogle("syncClients", clients);
+                renderAccountStatement();
+                renderClientsList();
+                showToast("Cuenta saldada por completo.", "success");
+            }
+        }
+
+        function printClientStatement() {
+            if(!currentSelectedClient) return;
+            const c = currentSelectedClient;
+            let runningBalance = 0;
+            let rowsHtml = c.transactions.map(t => {
+                let cargo = t.type === 'invoice' ? t.total : 0;
+                let abono = t.type === 'payment' ? t.amount : 0;
+                runningBalance += (cargo - abono);
+                return `
+                    <tr style="border-bottom: 1px dashed #ddd;">
+                        <td style="padding: 4px 0; font-family: monospace; font-size: 10px;">${t.date.split(',')[0]}<br><span style="font-size:8px">${t.id}</span></td>
+                        <td style="padding: 4px 0; text-align: right; font-family: monospace; font-size: 10px;">${cargo > 0 ? '$'+cargo.toLocaleString() : '-'}</td>
+                        <td style="padding: 4px 0; text-align: right; font-family: monospace; font-size: 10px;">${abono > 0 ? '$'+abono.toLocaleString() : '-'}</td>
+                        <td style="padding: 4px 0; text-align: right; font-family: monospace; font-size: 10px; font-weight: bold;">$${runningBalance.toLocaleString()}</td>
+                    </tr>`;
+            }).join('');
+
+            const printArea = document.getElementById('print-receipt-area');
+            printArea.classList.remove('hidden');
+            printArea.innerHTML = `
+                <div style="width: 100%; max-width: 80mm; font-family: monospace; color: black; background: white; padding: 5px;">
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <h2 style="font-size: 16px; font-weight: bold; margin: 0;">PUNTO FRESH</h2>
+                        <p style="font-size: 10px; margin: 2px 0;">NIT: ${companyNIT}</p>
+                        <p style="font-size: 10px; margin: 2px 0;">ESTADO DE CUENTA DE CRÉDITO</p>
+                        <div style="border-bottom: 2px dashed black; margin: 10px 0;"></div>
+                    </div>
+                    <div style="font-size: 11px; margin-bottom: 10px;">
+                        <p style="margin: 2px 0;"><strong>Cliente:</strong> ${c.name}</p>
+                        <p style="margin: 2px 0;"><strong>Celular:</strong> ${c.phone}</p>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid black;">
+                                <th style="text-align: left; font-size: 10px;">Fecha/Ref</th>
+                                <th style="text-align: right; font-size: 10px;">Cargo</th>
+                                <th style="text-align: right; font-size: 10px;">Abono</th>
+                                <th style="text-align: right; font-size: 10px;">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                    <div style="border-top: 1px dashed black; padding-top: 5px;">
+                        <p style="text-align: right; font-size: 12px; font-weight: bold;">DEUDA ACTUAL: $${runningBalance.toLocaleString()}</p>
+                    </div>
+                </div>`;
+
+            document.body.classList.add('printing-mode');
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('printing-mode');
+                printArea.classList.add('hidden');
+            }, 300);
+        }
+
+        // ==========================================
+        // 🛠️ MANTENIMIENTO: INVENTARIO, GASTOS, AJUSTES
+        // ==========================================
+        function saveInventoryProduct() {
+            const id = document.getElementById('inv-edit-id').value;
+            const name = document.getElementById('inv-name').value.trim();
+            const cost = parseInt(document.getElementById('inv-cost').value);
+            const price = parseInt(document.getElementById('inv-price').value);
+            const stock = parseInt(document.getElementById('inv-stock').value);
+            const isSpecial = document.getElementById('inv-is-special').checked;
+            let img = document.getElementById('inv-img-base64').value || "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=400&auto=format&fit=crop";
+            let portion = document.getElementById('inv-portion').value || "N/A";
+
+            if(!name || isNaN(cost) || isNaN(price) || isNaN(stock)) {
+                showToast("Faltan datos del producto.", "error");
+                return;
+            }
+
+            const prodData = {
+                id: id ? id : "PF-" + Math.floor(100 + Math.random() * 900),
+                name, desc: document.getElementById('inv-desc').value,
+                category: document.getElementById('inv-category').value,
+                measure: document.getElementById('inv-measure').value,
+                cost, price, stock, img, sales: 0, porcion: portion, isSpecial: isSpecial
+            };
+
+            if(id) {
+                const idx = products.findIndex(p => p.id === id);
+                products[idx] = prodData;
+            } else { products.push(prodData); }
+
+            sincronizarConGoogle("syncProducts", products); saveState(); renderInventory();
+            showToast("Catálogo actualizado.", "success");
+            
+            document.getElementById('inv-edit-id').value = '';
+            document.getElementById('inv-name').value = '';
+            document.getElementById('inv-desc').value = '';
+            document.getElementById('inv-cost').value = '';
+            document.getElementById('inv-price').value = '';
+            document.getElementById('inv-portion').value = '';
+        }
+
+        function handleInvImageUpload(event) {
+            const file = event.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const max = 300; let scale = 1;
+                    if(img.width > max) scale = max / img.width;
+                    canvas.width = img.width * scale; canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0,0, canvas.width, canvas.height);
+                    document.getElementById('inv-img-base64').value = canvas.toDataURL('image/jpeg', 0.6);
+                    showToast("Foto comprimida.", "success");
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function renderInventory() {
+            const tbody = document.getElementById('inventory-rows'); tbody.innerHTML = '';
+            products.forEach(p => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-neutral-50 text-xs border-b">
+                        <td class="p-3 font-bold">${p.name}</td>
+                        <td class="p-3">${p.category}</td>
+                        <td class="p-3 text-red-600">$${p.cost.toLocaleString()}</td>
+                        <td class="p-3 text-emerald-600 font-bold">$${p.price.toLocaleString()}</td>
+                        <td class="p-3">${p.isSpecial ? "Temporada ⭐" : "Menú Fijo"}</td>
+                        <td class="p-3 flex gap-2">
+                            <button onclick="editProduct('${p.id}')" class="text-blue-600 hover:underline">Editar</button>
+                            <button onclick="deleteProduct('${p.id}')" class="text-red-500 hover:underline">Eliminar</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function editProduct(id) {
+            const p = products.find(x => x.id === id);
+            document.getElementById('inv-edit-id').value = p.id;
+            document.getElementById('inv-name').value = p.name;
+            document.getElementById('inv-desc').value = p.desc;
+            document.getElementById('inv-category').value = p.category;
+            document.getElementById('inv-portion').value = p.porcion || '';
+            document.getElementById('inv-measure').value = p.measure;
+            document.getElementById('inv-cost').value = p.cost;
+            document.getElementById('inv-price').value = p.price;
+            document.getElementById('inv-stock').value = p.stock;
+            document.getElementById('inv-is-special').checked = p.isSpecial === true;
+            document.getElementById('inv-img-base64').value = p.img;
+        }
+
+        async function deleteProduct(id) {
+            const confirm = await showCustomConfirm("Eliminar", "¿Eliminar artículo?");
+            if(confirm) {
+                products = products.filter(p => p.id !== id);
+                sincronizarConGoogle("syncProducts", products); saveState(); renderInventory();
+                showToast("Eliminado del catálogo.", "success");
+            }
+        }
+
+        function saveExpense() {
+            const desc = document.getElementById('expense-desc').value;
+            const val = parseInt(document.getElementById('expense-value').value);
+            if(!desc || isNaN(val)) return;
+            let e = { date: new Date().toLocaleDateString(), desc, val, closed: false };
+            expenses.push(e); sincronizarConGoogle("saveExpense", e); saveState();
+            document.getElementById('expense-desc').value = '';
+            document.getElementById('expense-value').value = '';
+            renderExpenses(); renderFinances();
+            showToast("Egreso registrado en caja.", "success");
+        }
+
+        function renderExpenses() {
+            const tbody = document.getElementById('expenses-rows'); tbody.innerHTML = '';
+            [...expenses].reverse().forEach(e => {
+                tbody.innerHTML += `
+                    <tr class="border-b text-xs">
+                        <td class="py-2">${e.date}</td>
+                        <td>${e.desc} ${e.closed ? '<span class="text-[9px] bg-neutral-200 px-1 py-0.5 rounded ml-1">Arqueado</span>' : ''}</td>
+                        <td class="text-right text-red-600 font-bold">$${e.val.toLocaleString()}</td>
+                    </tr>`;
+            });
+        }
+
+        // --- ACCIONES DE GUARDADO DE CONFIGURACIÓN DEL NEGOCIO ---
+        function saveCompanySettings() {
+            companyPhone = document.getElementById('settings-phone').value;
+            companyNIT = document.getElementById('settings-nit').value;
+            mainBannerImg = document.getElementById('settings-main-banner-img').value;
+            companyAddress = document.getElementById('settings-address').value;
+            driverPhone1 = document.getElementById('settings-driver1').value;
+            driverPhone2 = document.getElementById('settings-driver2').value;
+            driverPhone3 = document.getElementById('settings-driver3').value;
+            
+            adminUser = document.getElementById('settings-admin-user').value.trim() || 'admin';
+            adminPass = document.getElementById('settings-admin-pass').value.trim() || 'fresh123';
+
+            const waiterPass = document.getElementById('settings-waiter-pass').value.trim() || '1234';
+
+            // Datos de image_7f3a73.png
+            const nequi = document.getElementById('settings-nequi').value;
+            const bancolombia = document.getElementById('settings-bancolombia').value;
+            const announcement = document.getElementById('settings-announcement').value;
+            const bTitle = document.getElementById('settings-banner-title').value;
+            const bDesc = document.getElementById('settings-banner-desc').value;
+
+            localStorage.setItem(DB_PREFIX + 'companyPhone', companyPhone);
+            localStorage.setItem(DB_PREFIX + 'companyNIT', companyNIT);
+            localStorage.setItem(DB_PREFIX + 'mainBannerImg', mainBannerImg);
+            localStorage.setItem(DB_PREFIX + 'companyAddress', companyAddress);
+            localStorage.setItem(DB_PREFIX + 'driverPhone1', driverPhone1);
+            localStorage.setItem(DB_PREFIX + 'driverPhone2', driverPhone2);
+            localStorage.setItem(DB_PREFIX + 'driverPhone3', driverPhone3);
+            localStorage.setItem(DB_PREFIX + 'adminUser', adminUser);
+            localStorage.setItem(DB_PREFIX + 'adminPass', adminPass);
+            localStorage.setItem(DB_PREFIX + 'waiterPass', waiterPass);
+
+            localStorage.setItem(DB_PREFIX + 'companyNequi', nequi);
+            localStorage.setItem(DB_PREFIX + 'companyBancolombia', bancolombia);
+            localStorage.setItem(DB_PREFIX + 'announcementMessage', announcement);
+            localStorage.setItem(DB_PREFIX + 'bannerTitle', bTitle);
+            localStorage.setItem(DB_PREFIX + 'bannerDesc', bDesc);
+
+            sincronizarConGoogle("saveConfig", {
+              company_phone: companyPhone,
+              company_nit: companyNIT,
+              company_address: companyAddress,
+              main_banner_img: mainBannerImg,
+              company_nequi: nequi,
+              company_bancolombia: bancolombia,
+              announcement_message: announcement,
+              banner_title: bTitle,
+              banner_desc: bDesc,
+              waiter_pass: waiterPass
+            });
+
+            window.dispatchEvent(new Event('storage'));
+            showToast("Ajustes generales guardados correctamente.", "success");
+        }
+
+        function applyFinanceFilters() {
+            const start = document.getElementById('finance-start-date').value;
+            const end = document.getElementById('finance-end-date').value;
+            if(!start || !end) {
+                showToast("Por favor selecciona ambas fechas.", "error");
+                return;
+            }
+            currentFinanceFilter = { start, end };
+            renderFinances();
+            showToast("Filtro de fecha aplicado.", "success");
+        }
+
+        function clearFinanceFilters() {
+            document.getElementById('finance-start-date').value = '';
+            document.getElementById('finance-end-date').value = '';
+            currentFinanceFilter = null;
+            renderFinances();
+            showToast("Filtro limpiado. Mostrando el turno activo.", "info");
+        }
+
+        function parseLocalDate(dateStr) {
+            const parsed = Date.parse(dateStr);
+            if (!isNaN(parsed)) return new Date(parsed);
+            try {
+                const parts = dateStr.split(',')[0].split('/');
+                if (parts.length === 3) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+            } catch(e) {}
+            return new Date();
+        }
+
+        function renderFinances() {
+            let rev = 0, cost = 0, exp = 0;
+            let waiterStats = {};
+            
+            let filteredOrders = [];
+            let filteredExpenses = [];
+
+            if (currentFinanceFilter) {
+                const startDate = new Date(currentFinanceFilter.start);
+                startDate.setHours(0,0,0,0);
+                const endDate = new Date(currentFinanceFilter.end);
+                endDate.setHours(23,59,59,999);
+
+                filteredOrders = orders.filter(o => {
+                    const orderDate = parseLocalDate(o.date);
+                    return orderDate >= startDate && orderDate <= endDate;
+                });
+
+                filteredExpenses = expenses.filter(e => {
+                    const expDate = parseLocalDate(e.date);
+                    return expDate >= startDate && expDate <= endDate;
+                });
+            } else {
+                filteredOrders = orders.filter(o => o.closed === false || o.closed === undefined);
+                filteredExpenses = expenses.filter(e => e.closed === false || e.closed === undefined);
+            }
+
+            filteredOrders.forEach(o => {
+                rev += o.total;
+                let wKey = o.waiterName || "Caja";
+                if(!waiterStats[wKey]) waiterStats[wKey] = { count: 0, amount: 0 };
+                waiterStats[wKey].count++;
+                waiterStats[wKey].amount += o.total;
+
+                o.items.forEach(i => {
+                    let prod = products.find(p => p.id === i.id);
+                    if(prod) cost += (prod.cost * i.quantity);
+                });
+            });
+
+            filteredExpenses.forEach(e => { exp += e.val; });
+
+            document.getElementById('metric-revenue').innerText = `$${rev.toLocaleString()}`;
+            document.getElementById('metric-cost').innerText = `$${cost.toLocaleString()}`;
+            document.getElementById('metric-expenses').innerText = `$${exp.toLocaleString()}`;
+            document.getElementById('metric-profit').innerText = `$${(rev - cost - exp).toLocaleString()}`;
+
+            let continuousProductStats = {};
+            orders.forEach(o => {
+                o.items.forEach(i => {
+                    if(!continuousProductStats[i.name]) {
+                        continuousProductStats[i.name] = 0;
+                    }
+                    continuousProductStats[i.name] += i.quantity;
+                });
+            });
+
+            const sortedProducts = Object.keys(continuousProductStats).map(name => ({
+                name: name,
+                qty: continuousProductStats[name]
+            })).sort((a,b) => b.qty - a.qty);
+
+            const pBody = document.getElementById('products-leaderboard-rows'); pBody.innerHTML = '';
+            if (sortedProducts.length === 0) {
+                pBody.innerHTML = `<tr><td colspan="2" class="p-3 text-center text-neutral-400 text-xs">Aún no se registran ventas históricas.</td></tr>`;
+            } else {
+                sortedProducts.forEach(prod => {
+                    pBody.innerHTML += `
+                        <tr class="text-xs">
+                            <td class="p-3 font-bold text-fresh-purple">${prod.name}</td>
+                            <td class="p-3 text-center font-extrabold text-neutral-600 bg-neutral-50/50">${prod.qty} unidades</td>
+                        </tr>`;
+                });
+            }
+
+            const wBody = document.getElementById('waiters-leaderboard-rows'); wBody.innerHTML = '';
+            const waiterKeys = Object.keys(waiterStats);
+            if(waiterKeys.length === 0) {
+                wBody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-neutral-400 text-xs">Sin transacciones registradas.</td></tr>`;
+            } else {
+                waiterKeys.forEach(name => {
+                    let s = waiterStats[name];
+                    wBody.innerHTML += `<tr class="text-xs"><td class="p-3 font-bold uppercase">${name}</td><td class="p-3 text-center">${s.count} servicios</td><td class="p-3 text-right font-black text-emerald-600">$${s.amount.toLocaleString()}</td></tr>`;
+                });
+            }
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('history-rows'); tbody.innerHTML = '';
+            [...orders].reverse().forEach(o => {
+                tbody.innerHTML += `
+                    <tr class="border-b transition hover:bg-neutral-50 text-xs">
+                        <td class="py-3 px-2 font-bold text-fresh-purple">${o.id}</td>
+                        <td class="py-3 px-2">
+                            ${o.date.split(',')[0]}<br>
+                            <span class="text-[9px] font-bold bg-neutral-200 px-1.5 py-0.5 rounded">${o.mesa_o_direccion}</span>
+                            ${o.closed ? '<span class="text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded ml-1 font-bold">Cerrado</span>' : '<span class="text-[9px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded ml-1 font-bold">Abierto</span>'}
+                        </td>
+                        <td class="py-3 px-2 font-black text-emerald-600 text-right">$${o.total.toLocaleString()}</td>
+                        <td class="py-3 px-2 text-center flex flex-col gap-1 items-center justify-center">
+                            <button onclick="reprintReceipt('${o.id}')" class="bg-fresh-purple text-white px-3 py-1 rounded-lg text-[9px] w-full"><i class="fa-solid fa-print"></i> Re-imprimir</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function reprintReceipt(id) {
+            const o = orders.find(x => x.id === id);
+            if(o) generateAndPrintThermalTicket(o);
+        }
+
+        function calculatePOSChange() {
+            const totalStr = document.getElementById('pos-total').innerText.replace(/[^0-9]/g, '');
+            const total = parseInt(totalStr) || 0;
+            const cashInput = document.getElementById('pos-cash-received');
+            const received = parseInt(cashInput.value) || 0;
+            if (total === 0) {
+                cashInput.value = '';
+                document.getElementById('pos-change-amount').innerText = '$0';
+                return;
+            }
+            const change = received - total;
+            if (change >= 0) {
+                document.getElementById('pos-change-amount').innerText = '$' + change.toLocaleString();
+                document.getElementById('pos-change-amount').className = "font-extrabold text-sm text-emerald-600";
+            } else {
+                document.getElementById('pos-change-amount').innerText = 'Faltan $' + Math.abs(change).toLocaleString();
+                document.getElementById('pos-change-amount').className = "font-extrabold text-xs text-red-500";
+            }
+        }
+
+        function downloadCierreExcel() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "ID Factura,Fecha,Cliente,Total,Metodo de Pago,Vendedor,Caja Cerrada\n";
+            
+            orders.forEach(o => {
+                csvContent += `"${o.id}","${o.date}","${o.clientName}",${o.total},"${o.payment}","${o.waiterName || 'Caja'}",${o.closed ? 'SI' : 'NO'}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Reporte_Contable_${new Date().toLocaleDateString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function renderPurchasesTab() {
+            const select = document.getElementById('purch-prod-select');
+            select.innerHTML = '<option value="">-- Seleccionar Plato/Insumo --</option>';
+            products.forEach(p => { select.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
+        }
+
+        function addProdToPurchase() {
+            const sel = document.getElementById('purch-prod-select'); const id = sel.value;
+            const qty = parseInt(document.getElementById('purch-qty').value);
+            const cost = parseInt(document.getElementById('purch-cost').value);
+            if(!id || isNaN(qty) || isNaN(cost)) return;
+            purchCart.push({ id, name: sel.options[sel.selectedIndex].text, qty, cost });
+            let list = document.getElementById('purch-cart-list'); list.innerHTML = '';
+            purchCart.forEach(i => list.innerHTML += `<div class="text-[10px] bg-neutral-50 p-1.5 border rounded mb-1 font-bold">${i.qty}x ${i.name} - $${(i.qty*i.cost).toLocaleString()}</div>`);
+        }
+
+        function processPurchase() {
+            if(!purchCart.length) return;
+            let total = purchCart.reduce((s,i) => s + (i.qty * i.cost), 0);
+            let p = {
+                date: new Date().toLocaleDateString(),
+                supplier: document.getElementById('purch-supplier').value || "Proveedor",
+                items: [...purchCart], total
+            };
+            purchasesHistory.push(p); sincronizarConGoogle("savePurchase", p); saveState(); purchCart = [];
+            showToast("Compras cargadas exitosamente.", "success");
+            document.getElementById('purch-cart-list').innerHTML = '';
+        }
+
+        function initAdminDashboard() {
+            renderWebOrdersPOS();
+            renderBillingTables();
+            renderPOSProducts();
+            renderInventory();
+            renderExpenses();
+            renderHistory();
+            renderFinances();
+            renderPurchasesTab();
+            populatePOSClientSelect();
+            populatePOSTableSelect();
+        }
+
+        window.addEventListener('storage', function(e) {
+            if (e.key === DB_PREFIX + 'mesas_v2') {
+                mesas = JSON.parse(e.newValue || '[]');
+                renderBillingTables();
+                populatePOSTableSelect();
+            }
+            if (e.key === DB_PREFIX + 'pendingWebOrders') {
+                pendingWebOrders = JSON.parse(e.newValue || '[]');
+                renderWebOrdersPOS();
+            }
+            if (e.key === DB_PREFIX + 'clients') {
+                clients = JSON.parse(e.newValue || '[]');
+                renderClientsList();
+                populatePOSClientSelect();
+            }
+            if (e.key === DB_PREFIX + 'orders') {
+                orders = JSON.parse(e.newValue || '[]');
+                renderHistory();
+                renderFinances();
+            }
+            if (e.key === DB_PREFIX + 'cashRegisterState') {
+                cashRegisterState = JSON.parse(e.newValue || '{"active":false}');
+                updateCashRegisterUI();
+            }
+            if (e.key === DB_PREFIX + 'sessionActive') {
+                checkSession();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto Fresh - Comandas de Mesero (Inírida)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        fresh: {
+                            purple: '#2E062B',       // Púrpura principal
+                            lightPurple: '#FAF0F9',  // Lila pastel claro
+                            pink: '#E1B1D7',         // Rosa decorativo
+                            pastelGreen: '#E2F0D9',  // Verde menta suave
+                            cream: '#FFFDF9',        // Crema de fondo
+                            dark: '#1E031B',         // Negro/Morado oscuro
+                            gold: '#D4AF37'          // Dorado premium
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #FFFDF9; 
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="text-fresh-dark min-h-screen flex flex-col" onload="checkWaiterSession()">
+
+    <!-- PANTALLA DE APERTURA DE COMANDA (LOGIN) -->
+    <div id="waiter-login-screen" class="fixed inset-0 z-50 bg-fresh-purple flex items-center justify-center p-4 transition-all duration-300">
+        <div class="bg-white max-w-sm w-full rounded-3xl p-6 shadow-2xl border border-fresh-pink/20 text-center flex flex-col items-center">
+            <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Punto Fresh Logo" class="h-16 w-auto object-contain mb-4">
+            <h2 class="font-serif text-xl font-black text-fresh-purple leading-tight">Apertura de Comanda</h2>
+            <p class="text-xs text-neutral-400 mb-6">Punto Fresh - Servicios Inírida</p>
+            
+            <div class="w-full text-left space-y-4">
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Nombre del Mesero *</label>
+                    <div class="relative">
+                        <input type="text" id="custom-waiter-input" placeholder="Ej: Camilo" class="w-full bg-neutral-50 border border-neutral-200 py-3 px-3 pl-10 rounded-xl text-xs font-bold text-fresh-purple outline-none focus:ring-1 focus:ring-fresh-purple">
+                        <i class="fa-solid fa-user-tag absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs"></i>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Contraseña de Mesero *</label>
+                    <div class="relative">
+                        <input type="password" id="waiter-pin-input" placeholder="Ingresa el PIN de seguridad" class="w-full bg-neutral-50 border border-neutral-200 py-3 px-3 pl-10 rounded-xl text-xs font-bold text-fresh-purple outline-none focus:ring-1 focus:ring-fresh-purple">
+                        <i class="fa-solid fa-key absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs"></i>
+                    </div>
+                </div>
+
+                <button onclick="loginWithCustomWaiter()" class="w-full bg-fresh-purple text-white py-3.5 rounded-xl font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-folder-open text-fresh-pink"></i> Abrir Comanda Inírida
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CABECERA DE NAVEGACIÓN -->
+    <header class="bg-fresh-purple text-white py-4 px-4 shadow-md shrink-0 flex items-center justify-between z-40 relative">
+        <div class="flex items-center gap-2">
+            <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Logo" class="h-10 w-auto object-contain">
+            <div>
+                <h1 class="text-xs font-serif italic text-fresh-pink leading-none">Punto Fresh</h1>
+                <p class="text-[9px] text-fresh-lightPurple">Comandas - Servicios Inírida</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-2 text-xs">
+            <button onclick="addNewTable()" title="Añadir nueva mesa" class="text-emerald-400 p-1 hover:text-white flex items-center gap-1 font-bold text-[10px] bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-500/20"><i class="fa-solid fa-plus text-xs"></i> Mesa</button>
+            <p id="waiter-name-display" class="font-bold text-fresh-lightPurple bg-white/10 px-3 py-1.5 rounded-lg border border-white/10"></p>
+            <button onclick="closeWaiterSession()" title="Cerrar comanda" class="text-red-400 p-1 hover:text-white flex items-center gap-1 font-bold text-[10px] bg-red-950/40 px-2.5 py-1 rounded-lg border border-red-500/20"><i class="fa-solid fa-lock text-xs text-fresh-pink"></i> Cerrar Comanda</button>
+        </div>
+    </header>
+
+    <!-- TOAST DE NOTIFICACIONES -->
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-[90%] max-w-sm text-center"></div>
+
+    <!-- PANEL PRINCIPAL (LISTA DE MESAS) -->
+    <main class="flex-grow max-w-4xl mx-auto w-full p-4 space-y-4">
+        
+        <!-- ESTADÍSTICAS RÁPIDAS -->
+        <section class="grid grid-cols-3 gap-2 text-center text-xs">
+            <div class="bg-white p-3 rounded-xl border border-fresh-pink/15 shadow-sm">
+                <span class="text-neutral-400 font-bold block text-[9px] uppercase">Libres</span>
+                <span id="stat-free-tables" class="text-sm font-black text-emerald-600">0</span>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-fresh-pink/15 shadow-sm">
+                <span class="text-neutral-400 font-bold block text-[9px] uppercase">Ocupadas</span>
+                <span id="stat-busy-tables" class="text-sm font-black text-fresh-purple">0</span>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-fresh-pink/15 shadow-sm">
+                <span class="text-neutral-400 font-bold block text-[9px] uppercase">Pidiendo Cuenta</span>
+                <span id="stat-bill-tables" class="text-sm font-black text-amber-500">0</span>
+            </div>
+        </section>
+
+        <!-- CUADRÍCULA DE MESAS -->
+        <section class="bg-white p-4 rounded-2xl border border-fresh-pink/10 shadow-sm flex-grow">
+            <h2 class="font-serif text-sm font-black text-fresh-purple mb-3 uppercase tracking-wide flex items-center gap-1.5">
+                <i class="fa-solid fa-chair text-fresh-pink"></i> Selecciona la Mesa del Cliente
+            </h2>
+            <div id="tables-grid-container" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+        </section>
+
+    </main>
+
+    <!-- DRAWER DE COMANDA ACTIVA (OCULTO POR DEFECTO) -->
+    <div id="table-drawer" class="fixed inset-0 bg-fresh-purple/70 backdrop-blur-xs z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div id="table-drawer-panel" class="fixed right-0 top-0 bottom-0 max-w-lg w-full bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col" onclick="event.stopPropagation()">
+            
+            <!-- Cabecera del Panel -->
+            <div class="p-4 border-b border-fresh-pink/10 bg-fresh-lightPurple/50 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <span id="drawer-table-icon" class="w-8 h-8 rounded-full bg-fresh-purple text-white flex items-center justify-center text-sm font-bold">1</span>
+                    <div>
+                        <h3 id="drawer-table-title" class="font-serif text-sm font-black text-fresh-purple uppercase">Mesa 1</h3>
+                        <p id="drawer-table-waiter" class="text-[9px] text-neutral-400">Atiende: -</p>
+                    </div>
+                </div>
+                <button onclick="closeTableDrawer()" class="text-neutral-400 hover:text-fresh-purple p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <!-- Contenido Principal Desplazable del Drawer (Dividido en Comanda y Menú) -->
+            <div class="flex-grow overflow-y-auto flex flex-col p-4 space-y-4">
+                
+                <!-- COMANDA ACTUAL DE LA MESA -->
+                <div class="bg-neutral-50 p-3 rounded-2xl border border-neutral-100 flex flex-col shrink-0 min-h-[140px]">
+                    <div class="flex justify-between items-center mb-2 border-b border-neutral-200 pb-1.5">
+                        <span class="text-[10px] font-black text-neutral-500 uppercase tracking-wider">Productos en Comanda</span>
+                        <span id="drawer-table-status" class="text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full">Libre</span>
+                    </div>
+                    
+                    <div id="comanda-items-list" class="space-y-2 flex-grow overflow-y-auto max-h-[160px] pr-1"></div>
+                    
+                    <div class="flex justify-between items-end border-t border-neutral-200 pt-2 mt-2">
+                        <span class="text-[9px] text-neutral-400 font-bold">Subtotal Mesa:</span>
+                        <span id="drawer-table-total" class="font-black text-base text-fresh-purple">$0</span>
+                    </div>
+                </div>
+
+                <!-- AÑADIR NUEVO PRODUCTO RÁPIDO -->
+                <div class="flex-grow flex flex-col">
+                    <h4 class="text-[10px] font-black text-neutral-400 uppercase tracking-wider mb-2">Añadir Helados y Bebidas</h4>
+                    
+                    <!-- Filtro buscador de helados -->
+                    <div class="relative mb-2">
+                        <input type="text" id="menu-search-input" oninput="renderWaiterMenu()" placeholder="Buscar en la carta..." class="w-full bg-neutral-50 border border-neutral-200 py-2 px-3 pl-8 rounded-lg text-xs font-semibold outline-none focus:ring-1 focus:ring-fresh-purple transition-all">
+                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs"></i>
+                    </div>
+
+                    <!-- Botones de Categorías Desplazables -->
+                    <div id="waiter-categories-slider" class="flex gap-1.5 overflow-x-auto no-scrollbar pb-2 shrink-0"></div>
+
+                    <!-- Lista de Productos Disponibles -->
+                    <div id="waiter-menu-grid" class="flex-grow overflow-y-auto grid grid-cols-2 gap-2 pr-1 max-h-[220px]"></div>
+                </div>
+
+            </div>
+
+            <!-- Botones de Acción de Comanda -->
+            <div class="p-4 border-t border-fresh-pink/10 bg-white grid grid-cols-2 gap-2 shrink-0">
+                <button onclick="requestTableBill()" id="btn-pedir-cuenta" class="py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md transition transform active:scale-95 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> Solicitar Cuenta
+                </button>
+                <button onclick="saveAndSendComanda()" class="py-3 bg-fresh-purple hover:bg-fresh-dark text-white rounded-xl text-xs font-bold shadow-md transition transform active:scale-95 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-paper-plane text-fresh-pink"></i> Enviar a Cocina
+                </button>
+                <button onclick="clearCurrentMesa()" id="btn-liberar-mesa" class="col-span-2 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-trash-can"></i> Cancelar / Liberar Mesa
+                </button>
+                <button onclick="deleteCurrentTable()" id="btn-eliminar-mesa" class="col-span-2 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 hidden">
+                    <i class="fa-solid fa-folder-minus"></i> Eliminar Mesa del Sistema
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL DE NOTAS ESPECIALES POR PRODUCTO -->
+    <div id="note-modal" class="fixed inset-0 z-[100] bg-fresh-purple/80 backdrop-blur-xs flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-xs w-full rounded-2xl p-5 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="note-box">
+            <h4 class="font-serif text-sm font-black text-fresh-purple mb-1">Notas Especiales</h4>
+            <p id="note-product-name" class="text-[10px] text-neutral-400 font-bold mb-3 uppercase">Copa Nativos</p>
+            
+            <textarea id="note-text-area" rows="3" placeholder="Ej: Sin maní, salsa de fresa extra, helado de chocolate..." class="w-full bg-neutral-50 border border-neutral-200 p-2.5 rounded-lg text-xs font-medium outline-none focus:ring-1 focus:ring-fresh-purple mb-3 resize-none"></textarea>
+            
+            <div class="flex gap-2 justify-end">
+                <button onclick="closeNoteModal()" class="px-4 py-2 bg-neutral-100 text-neutral-700 text-[10px] font-bold rounded-lg">Cancelar</button>
+                <button onclick="applyProductNote()" class="px-4 py-2 bg-fresh-purple text-white text-[10px] font-bold rounded-lg shadow-sm">Guardar Nota</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PIE DE PÁGINA INFORMATIVO -->
+    <footer class="bg-fresh-purple text-white py-3 text-center text-[9px] border-t border-fresh-pink/20 shrink-0">
+        © 2026 PUNTO FRESH - Módulo Comanda Móvil para Meseros (Inírida).
+    </footer>
+
+    <!-- SCRIPT DE COMPORTAMIENTO -->
+    <script>
+        const DB_PREFIX = "PUNTOFRESH_V1_";
+
+        let currentWaiter = localStorage.getItem(DB_PREFIX + 'currentWaiter') || "";
+        let products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
+        let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
+
+        let activeTable = null;
+        let waiterCart = []; // Almacenamiento temporal de los productos seleccionados para la mesa activa
+        let activeCategory = "Todos";
+        let noteItemIndex = null; // Índice del ítem del carrito al que se le añadirá nota
+
+        // --- INICIALIZACIÓN DE LAS MESAS POR DEFECTO SI NO EXISTEN ---
+        const DEFAULT_MESAS = [
+            { id: "M1", name: "Mesa 1", label: "Mesa 1", status: "Libre", items: [], waiter: "" },
+            { id: "M2", name: "Mesa 2", label: "Mesa 2", status: "Libre", items: [], waiter: "" },
+            { id: "M3", name: "Mesa 3", label: "Mesa 3", status: "Libre", items: [], waiter: "" },
+            { id: "M4", name: "Mesa 4", label: "Mesa 4", status: "Libre", items: [], waiter: "" },
+            { id: "M5", name: "Mesa 5", label: "Mesa 5", status: "Libre", items: [], waiter: "" },
+            { id: "M6", name: "Mesa 6", label: "Mesa 6", status: "Libre", items: [], waiter: "" },
+            { id: "M7", name: "Mesa 7", label: "Mesa 7", status: "Libre", items: [], waiter: "" },
+            { id: "M8", name: "Mesa 8", label: "Mesa 8", status: "Libre", items: [], waiter: "" },
+            { id: "M9", name: "Mesa Auxiliar 1", label: "Mesa Auxiliar 1", status: "Libre", items: [], waiter: "" },
+            { id: "M10", name: "Mesa Auxiliar 2", label: "Mesa Auxiliar 2", status: "Libre", items: [], waiter: "" }
+        ];
+
+        // --- SISTEMA DE NOTIFICACIONES TOAST ---
+        function showToast(msg, type='info') {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            const toast = document.createElement('div');
+            let bg = 'bg-fresh-purple border-fresh-pink/20';
+            if (type === 'success') bg = 'bg-emerald-600 border-white/20';
+            if (type === 'error') bg = 'bg-rose-600 border-white/20';
+            
+            toast.className = `mx-auto px-5 py-2.5 rounded-full text-white text-xs font-bold shadow-xl transform transition-all duration-300 -translate-y-10 opacity-0 flex items-center justify-center gap-1.5 ${bg} border pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid fa-mobile-screen-button text-fresh-pink"></i> <span>${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.remove('-translate-y-10', 'opacity-0'); }, 10);
+            setTimeout(() => { 
+                toast.classList.add('-translate-y-10', 'opacity-0'); 
+                setTimeout(() => toast.remove(), 300); 
+            }, 2500);
+        }
+
+        // --- CONTROL DE SESIÓN CON PIN Y INGRESO DIRECTO ---
+        function checkWaiterSession() {
+            const screen = document.getElementById('waiter-login-screen');
+            if (currentWaiter) {
+                screen.classList.add('hidden', 'pointer-events-none');
+                document.getElementById('waiter-name-display').innerText = `Mesero: ${currentWaiter}`;
+                initWaiterApp();
+            } else {
+                screen.classList.remove('hidden', 'pointer-events-none');
+            }
+        }
+
+        function loginWithCustomWaiter() {
+            const nameInput = document.getElementById('custom-waiter-input');
+            const pinInput = document.getElementById('waiter-pin-input');
+            const name = nameInput.value.trim();
+            const pin = pinInput.value.trim();
+            
+            // Obtener PIN de mesero desde ajustes del POS, por defecto es 1234
+            const configPin = localStorage.getItem(DB_PREFIX + 'waiterPass') || "1234";
+
+            if (!name) {
+                showToast("Por favor ingresa tu nombre de mesero.", "error");
+                return;
+            }
+            if (!pin) {
+                showToast("Por favor ingresa el PIN de seguridad.", "error");
+                return;
+            }
+            if (pin !== configPin) {
+                showToast("Contraseña/PIN de mesero incorrecta.", "error");
+                return;
+            }
+
+            currentWaiter = name;
+            localStorage.setItem(DB_PREFIX + 'currentWaiter', name);
+            showToast(`¡Hola, ${name}! Comanda abierta de forma correcta para Inírida.`, 'success');
+            checkWaiterSession();
+            
+            nameInput.value = '';
+            pinInput.value = '';
+        }
+
+        function closeWaiterSession() {
+            const confirmed = confirm("¿Deseas cerrar la comanda actual? Esto cerrará tu sesión y restablecerá la terminal a 0.");
+            if (confirmed) {
+                currentWaiter = "";
+                localStorage.removeItem(DB_PREFIX + 'currentWaiter');
+                checkWaiterSession();
+                showToast("Comanda de mesero cerrada. Sesión en ceros.", "info");
+            }
+        }
+
+        // --- CARGAR DATOS GENERALES ---
+        function initWaiterApp() {
+            mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
+            if (mesas.length === 0) {
+                mesas = DEFAULT_MESAS;
+                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+            }
+
+            products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
+
+            renderTablesGrid();
+            buildWaiterCategoriesMenu();
+        }
+
+        // --- RENDERIZADO DEL PANEL DE MESAS ---
+        function renderTablesGrid() {
+            const container = document.getElementById('tables-grid-container');
+            container.innerHTML = '';
+
+            let freeCount = 0;
+            let busyCount = 0;
+            let billCount = 0;
+
+            // FILTRO QUIRÚRGICO: Excluir domicilios, pedidos para llevar y mostrador del panel de meseros
+            const mesasFisicas = mesas.filter(m => 
+                !m.name.toLowerCase().includes('domicilio') && 
+                !m.name.toLowerCase().includes('llevar') &&
+                !m.name.toLowerCase().includes('mostrador')
+            );
+
+            mesasFisicas.forEach(m => {
+                let statusColor = "bg-emerald-50 border-emerald-200 text-emerald-800";
+                let statusBadge = `<span class="bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Libre</span>`;
+                
+                // Verificadores de estado de cocina
+                let hasPendingOrPrep = m.items && m.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando');
+                let hasListo = m.items && m.items.some(i => i.status === 'Listo');
+
+                if (m.status === 'Ocupada') {
+                    if (!hasPendingOrPrep && hasListo) {
+                        // ¡PEDIDO LISTO! Animación y color llamativo
+                        statusColor = "bg-amber-100 border-amber-400 text-amber-900 animate-pulse shadow-md";
+                        statusBadge = `<span class="bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase"><i class="fa-solid fa-bell"></i> ¡Pedido Listo!</span>`;
+                    } else {
+                        statusColor = "bg-fresh-lightPurple border-fresh-pink/35 text-fresh-purple";
+                        statusBadge = `<span class="bg-fresh-purple text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Ocupada</span>`;
+                    }
+                    busyCount++;
+                } else if (m.status === 'Cuenta') {
+                    statusColor = "bg-amber-50 border-amber-300 text-amber-800";
+                    statusBadge = `<span class="bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Pide Cuenta</span>`;
+                    billCount++;
+                } else {
+                    freeCount++;
+                }
+
+                let itemsCount = m.items ? m.items.reduce((s,i) => s + i.quantity, 0) : 0;
+
+                container.innerHTML += `
+                    <button onclick="openTable('${m.id}')" class="p-4 rounded-2xl border ${statusColor} text-left flex flex-col justify-between h-28 shadow-sm transition active:scale-95 duration-200">
+                        <div class="w-full text-left">
+                            <span class="font-serif text-sm font-black block truncate leading-none mb-1">${m.name}</span>
+                            ${statusBadge}
+                        </div>
+                        <div class="flex items-center justify-between w-full text-[10px] text-neutral-400 mt-2">
+                            <span>${itemsCount > 0 ? `${itemsCount} uds` : 'Vacía'}</span>
+                            ${m.waiter ? `<span class="font-bold truncate max-w-[50%] text-[9px] uppercase"><i class="fa-solid fa-user"></i> ${m.waiter}</span>` : ''}
+                        </div>
+                    </button>
+                `;
+            });
+
+            document.getElementById('stat-free-tables').innerText = freeCount;
+            document.getElementById('stat-busy-tables').innerText = busyCount;
+            document.getElementById('stat-bill-tables').innerText = billCount;
+        }
+
+        // --- CONTROL DE MESA EN EDICIÓN ---
+        function openTable(id) {
+            activeTable = mesas.find(m => m.id === id);
+            if (!activeTable) return;
+
+            // VERIFICACIÓN QUIRÚRGICA: Si el pedido está Listo, preguntar si ya se entregó
+            let hasPendingOrPrep = activeTable.items && activeTable.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando');
+            let hasListo = activeTable.items && activeTable.items.some(i => i.status === 'Listo');
+            
+            if (!hasPendingOrPrep && hasListo) {
+                if (confirm(`El pedido de ${activeTable.name} está LISTO. ¿Confirmas que ya fue entregado a la mesa?`)) {
+                    activeTable.items.forEach(i => {
+                        if(i.status === 'Listo') i.status = 'Entregado';
+                    });
+                    localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                    window.dispatchEvent(new Event('storage'));
+                    showToast("Pedido entregado en mesa exitosamente.", "success");
+                    renderTablesGrid();
+                    return; // Retornamos para no abrir el cajón de toma de pedidos
+                }
+            }
+
+            waiterCart = [];
+            if(activeTable.items) {
+                activeTable.items.forEach(i => {
+                    waiterCart.push({
+                        id: i.id,
+                        name: i.name,
+                        price: i.price,
+                        quantity: i.quantity,
+                        status: i.status || 'Pendiente',
+                        note: i.note || ''
+                    });
+                });
+            }
+
+            document.getElementById('drawer-table-icon').innerText = activeTable.name.match(/\d+/) ? activeTable.name.match(/\d+/)[0] : "PF";
+            document.getElementById('drawer-table-title').innerText = activeTable.name;
+            document.getElementById('drawer-table-waiter').innerText = `Atendido por: ${activeTable.waiter || currentWaiter}`;
+
+            const statusLabel = document.getElementById('drawer-table-status');
+            if (activeTable.status === 'Ocupada') {
+                statusLabel.innerText = "Ocupada";
+                statusLabel.className = "text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-fresh-purple text-white";
+                document.getElementById('btn-liberar-mesa').classList.remove('hidden');
+                document.getElementById('btn-pedir-cuenta').classList.remove('hidden');
+                document.getElementById('btn-eliminar-mesa').classList.add('hidden');
+            } else if (activeTable.status === 'Cuenta') {
+                statusLabel.innerText = "Pidiendo Cuenta";
+                statusLabel.className = "text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white";
+                document.getElementById('btn-liberar-mesa').classList.add('hidden');
+                document.getElementById('btn-pedir-cuenta').classList.add('hidden');
+                document.getElementById('btn-eliminar-mesa').classList.add('hidden');
+            } else {
+                statusLabel.innerText = "Mesa Libre";
+                statusLabel.className = "text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white";
+                document.getElementById('btn-liberar-mesa').classList.add('hidden');
+                document.getElementById('btn-pedir-cuenta').classList.add('hidden');
+                document.getElementById('btn-eliminar-mesa').classList.remove('hidden');
+            }
+
+            updateComandaUI();
+            renderWaiterMenu();
+
+            const overlay = document.getElementById('table-drawer');
+            const panel = document.getElementById('table-drawer-panel');
+            overlay.classList.remove('pointer-events-none', 'opacity-0');
+            panel.classList.remove('translate-x-full');
+        }
+
+        function closeTableDrawer() {
+            const overlay = document.getElementById('table-drawer');
+            const panel = document.getElementById('table-drawer-panel');
+            overlay.classList.add('pointer-events-none', 'opacity-0');
+            panel.classList.add('translate-x-full');
+            activeTable = null;
+        }
+
+        // --- CONTROL Y RENDER DE COMANDAS ---
+        function updateComandaUI() {
+            const list = document.getElementById('comanda-items-list');
+            list.innerHTML = '';
+            let total = 0;
+
+            if (waiterCart.length === 0) {
+                list.innerHTML = `<p class="text-center text-xs text-neutral-400 py-6">Mesa sin pedidos. ¡Añade helados de la carta!</p>`;
+                document.getElementById('drawer-table-total').innerText = "$0";
+                return;
+            }
+
+            waiterCart.forEach((item, idx) => {
+                total += item.price * item.quantity;
+                
+                let statusBadgeColor = "bg-neutral-100 text-neutral-600 border border-neutral-300";
+                if(item.status === 'Listo') statusBadgeColor = "bg-emerald-50 text-emerald-600 border border-emerald-300";
+                if(item.status === 'Preparando') statusBadgeColor = "bg-purple-50 text-fresh-purple border border-fresh-pink/40";
+                if(item.status === 'Entregado') statusBadgeColor = "bg-neutral-200 text-neutral-500 border border-neutral-300";
+
+                list.innerHTML += `
+                    <div class="flex flex-col p-2.5 bg-white border border-neutral-200 rounded-xl text-xs gap-1 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-fresh-purple"><b>${item.quantity}x</b> ${item.name}</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${statusBadgeColor}">${item.status || 'Pendiente'}</span>
+                                <span class="font-black text-fresh-purple text-[11px]">$${(item.price * item.quantity).toLocaleString()}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between mt-1 text-[10px] bg-fresh-lightPurple/25 px-2 py-1 rounded border border-fresh-pink/10">
+                            <span class="text-neutral-400 italic font-medium truncate max-w-[70%]">${item.note ? `Nota: "${item.note}"` : 'Sin notas'}</span>
+                            <div class="flex gap-1.5 shrink-0 ml-2">
+                                <button onclick="openNoteModal(${idx})" class="text-fresh-purple hover:underline font-bold">Nota</button>
+                                <span class="text-neutral-300">|</span>
+                                <button onclick="updateCartItemQty(${idx}, -1)" class="text-rose-500 hover:underline font-bold">Quitar</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('drawer-table-total').innerText = `$${total.toLocaleString()}`;
+        }
+
+        function updateCartItemQty(idx, delta) {
+            if (waiterCart[idx].status !== 'Pendiente') {
+                showToast("Este producto ya se mandó a cocina y no se puede quitar.", "error");
+                return;
+            }
+            waiterCart[idx].quantity += delta;
+            if (waiterCart[idx].quantity <= 0) {
+                waiterCart.splice(idx, 1);
+            }
+            updateComandaUI();
+        }
+
+        // --- CONTROL DEL MENÚ DE HELADOS EN COMANDA ---
+        function buildWaiterCategoriesMenu() {
+            const container = document.getElementById('waiter-categories-slider');
+            container.innerHTML = '';
+
+            const categories = ["Todos"];
+            products.forEach(p => {
+                if(p.category && !categories.includes(p.category)) {
+                    categories.push(p.category);
+                }
+            });
+
+            categories.forEach(cat => {
+                const isActive = cat === activeCategory;
+                container.innerHTML += `
+                    <button onclick="setWaiterActiveCategory('${cat}')" class="shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${isActive ? 'bg-fresh-purple text-white border-fresh-purple' : 'bg-neutral-50 text-fresh-purple border-neutral-200' }">
+                        ${cat}
+                    </button>
+                `;
+            });
+        }
+
+        function setWaiterActiveCategory(cat) {
+            activeCategory = cat;
+            buildWaiterCategoriesMenu();
+            renderWaiterMenu();
+        }
+
+        function renderWaiterMenu() {
+            const grid = document.getElementById('waiter-menu-grid');
+            grid.innerHTML = '';
+            const search = document.getElementById('menu-search-input').value.toLowerCase();
+
+            let filtered = products;
+
+            if (activeCategory !== 'Todos') {
+                filtered = filtered.filter(p => p.category === activeCategory);
+            }
+
+            if (search) {
+                filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
+            }
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-center text-[10px] text-neutral-400 py-4">No se encontraron productos.</p>`;
+                return;
+            }
+
+            filtered.forEach(p => {
+                grid.innerHTML += `
+                    <button onclick="addProductToComanda('${p.id}')" class="bg-neutral-50 border border-neutral-200 p-2 rounded-xl text-left hover:bg-fresh-lightPurple transition flex flex-col justify-between h-14 active:scale-95">
+                        <span class="font-bold text-[10px] text-fresh-purple truncate w-full uppercase block">${p.name}</span>
+                        <span class="font-extrabold text-[10px] text-fresh-purple mt-1 block">$${p.price.toLocaleString()}</span>
+                    </button>
+                `;
+            });
+        }
+
+        function addProductToComanda(id) {
+            const p = products.find(x => x.id === id);
+            if (!p) return;
+
+            let exist = waiterCart.find(i => i.id === id && i.status === 'Pendiente');
+            if (exist) {
+                exist.quantity++;
+            } else {
+                waiterCart.push({
+                    id: p.id,
+                    name: p.name,
+                    price: p.price,
+                    quantity: 1,
+                    status: 'Pendiente',
+                    note: ''
+                });
+            }
+
+            updateComandaUI();
+            showToast(`${p.name} agregado.`, 'success');
+        }
+
+        // --- CONTROL MODAL NOTAS ---
+        function openNoteModal(idx) {
+            noteItemIndex = idx;
+            const item = waiterCart[idx];
+            document.getElementById('note-product-name').innerText = item.name;
+            document.getElementById('note-text-area').value = item.note || '';
+
+            const modal = document.getElementById('note-modal');
+            const box = document.getElementById('note-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeNoteModal() {
+            const modal = document.getElementById('note-modal');
+            const box = document.getElementById('note-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+            noteItemIndex = null;
+        }
+
+        function applyProductNote() {
+            if (noteItemIndex === null) return;
+            const note = document.getElementById('note-text-area').value.trim();
+            waiterCart[noteItemIndex].note = note;
+            updateComandaUI();
+            closeNoteModal();
+            showToast("Nota asignada al producto.", "success");
+        }
+
+        // --- ACCONES DE ENVÍO Y CONFIGURACIÓN ---
+        function saveAndSendComanda() {
+            if (!activeTable) return;
+
+            activeTable.items = [...waiterCart];
+            
+            if (waiterCart.length > 0) {
+                activeTable.status = (activeTable.status === 'Cuenta') ? 'Cuenta' : 'Ocupada';
+                activeTable.waiter = currentWaiter;
+            } else {
+                activeTable.status = "Libre";
+                activeTable.waiter = "";
+            }
+
+            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+            window.dispatchEvent(new Event('storage'));
+
+            showToast("¡Pedido guardado y enviado a la cocina!", "success");
+            closeTableDrawer();
+            renderTablesGrid();
+        }
+
+        function requestTableBill() {
+            if (!activeTable) return;
+            if (activeTable.items.length === 0) {
+                showToast("No se puede cobrar una mesa vacía.", "error");
+                return;
+            }
+
+            activeTable.status = "Cuenta";
+            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+            window.dispatchEvent(new Event('storage'));
+
+            showToast("¡Caja notificada de solicitud de cuenta!", "success");
+            closeTableDrawer();
+            renderTablesGrid();
+        }
+
+        function clearCurrentMesa() {
+            if (!activeTable) return;
+            
+            const confirmed = confirm("¿Deseas cancelar y liberar por completo esta mesa?");
+            if (confirmed) {
+                activeTable.items = [];
+                activeTable.status = "Libre";
+                activeTable.waiter = "";
+
+                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                window.dispatchEvent(new Event('storage'));
+
+                showToast("Mesa liberada por completo.", "info");
+                closeTableDrawer();
+                renderTablesGrid();
+            }
+        }
+
+        // --- GESTIÓN DE MESAS (AÑADIR / ELIMINAR) ---
+        function addNewTable() {
+            const tableName = prompt("Ingresa el nombre de la nueva mesa (Ej: Mesa 11, VIP 1):");
+            if (!tableName || tableName.trim() === "") return;
+            
+            const newId = "M" + Date.now();
+            const newMesa = {
+                id: newId,
+                name: tableName.trim(),
+                label: tableName.trim(),
+                status: "Libre",
+                items: [],
+                waiter: ""
+            };
+            
+            mesas.push(newMesa);
+            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+            window.dispatchEvent(new Event('storage'));
+            renderTablesGrid();
+            showToast("Nueva mesa agregada exitosamente.", "success");
+        }
+
+        function deleteCurrentTable() {
+            if (!activeTable) return;
+            if (activeTable.items && activeTable.items.length > 0) {
+                showToast("No puedes eliminar una mesa con pedidos activos.", "error");
+                return;
+            }
+            
+            const confirmed = confirm(`¿Estás seguro de ELIMINAR la ${activeTable.name} del sistema permanentemente?`);
+            if (confirmed) {
+                mesas = mesas.filter(m => m.id !== activeTable.id);
+                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                window.dispatchEvent(new Event('storage'));
+                closeTableDrawer();
+                renderTablesGrid();
+                showToast("Mesa eliminada del sistema.", "info");
+            }
+        }
+
+        // --- ESCUCHADOR EN TIEMPO REAL MULTI-VENTANA ---
+        window.addEventListener('storage', function(e) {
+            if (e.key === DB_PREFIX + 'mesas_v2') {
+                const newMesas = JSON.parse(e.newValue || '[]');
+                
+                // VERIFICACIÓN QUIRÚRGICA: Detectar pedidos listos para lanzar alerta al mesero
+                newMesas.forEach(newMesa => {
+                    let oldMesa = mesas.find(m => m.id === newMesa.id);
+                    if (oldMesa) {
+                        let oldPending = oldMesa.items ? oldMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
+                        let newPending = newMesa.items ? newMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
+                        let hasListo = newMesa.items ? newMesa.items.some(i => i.status === 'Listo') : false;
+                        
+                        // Si antes tenía helados pendientes y ahora no, y tiene helados listos -> Alerta
+                        if (oldPending && !newPending && hasListo) {
+                            showToast(`¡El pedido de ${newMesa.name} está LISTO para despachar!`, 'success');
+                            if (navigator.vibrate) navigator.vibrate([200, 100, 200]); // Vibración en móviles
+                        }
+                    }
+                });
+
+                mesas = newMesas;
+                renderTablesGrid();
+                if (activeTable) {
+                    const matched = mesas.find(m => m.id === activeTable.id);
+                    if (matched) {
+                        activeTable = matched;
+                        waiterCart = [];
+                        if (activeTable.items) {
+                            activeTable.items.forEach(i => {
+                                waiterCart.push({
+                                    id: i.id,
+                                    name: i.name,
+                                    price: i.price,
+                                    quantity: i.quantity,
+                                    status: i.status || 'Pendiente',
+                                    note: i.note || ''
+                                });
+                            });
+                        }
+                        updateComandaUI();
+                    }
+                }
+            }
+            if (e.key === DB_PREFIX + 'products') {
+                products = JSON.parse(e.newValue || '[]');
+                renderWaiterMenu();
+            }
+            if (e.key === DB_PREFIX + 'waiterPass') {
+                // PIN de meseros modificado de forma externa
+                showToast("Clave de acceso de meseros actualizada desde el POS.", "info");
+            }
+        });
+    </script>
+</body>
+</html>

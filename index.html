@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto Fresh - Heladería Artesanal Soft</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        fresh: {
+                            purple: '#2E062B',       // Púrpura principal
+                            lightPurple: '#FAF0F9',  // Lila pastel claro
+                            pink: '#E1B1D7',         // Rosa decorativo
+                            pastelGreen: '#E2F0D9',  // Verde menta suave
+                            cream: '#FFFDF9',        // Crema de fondo
+                            dark: '#1E031B',         // Negro/Morado oscuro
+                            gold: '#D4AF37'          // Dorado premium
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'serif'],
+                        cursive: ['"Pacifico"', 'cursive']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #FFFDF9; 
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .category-pill.active {
+            background-color: #2E062B;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(46, 6, 43, 0.2);
+        }
+    </style>
+</head>
+<body class="text-fresh-dark min-h-screen flex flex-col pb-20" onload="initApp()">
+
+    <!-- CONTENEDOR DE TOASTS -->
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[150] flex flex-col gap-2 pointer-events-none w-[90%] max-w-md text-center"></div>
+
+    <!-- LOGO SIEMPRE ARRIBA (NO SE TOCA) -->
+    <header class="bg-fresh-purple py-4 flex justify-center items-center shadow-md shrink-0 border-b border-fresh-pink/10">
+        <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Punto Fresh Logo" class="h-16 md:h-20 w-auto object-contain drop-shadow-lg" onerror="this.onerror=null;this.src='https://placehold.co/180x60/2E062B/white?text=Punto+Fresh';">
+    </header>
+
+    <!-- BANDA LILA CON LETRA PÚRPURA (MODIFICABLE DESDE EL POS) -->
+    <div id="lila-announcement-band" class="bg-fresh-lightPurple text-fresh-purple font-extrabold py-3 px-4 text-center text-xs md:text-sm shadow-sm border-b border-fresh-pink/20 transition-all flex items-center justify-center gap-2">
+        <i class="fa-solid fa-ice-cream animate-bounce"></i>
+        <span id="announcement-text-display">Cargando novedades...</span>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main class="max-w-5xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-8">
+        <!-- BANNER RESTAURADO (RELAJADO DEBAJO DE LA BANDA) -->
+        <section class="bg-fresh-purple text-white rounded-3xl overflow-hidden shadow-xl border border-white/10 relative">
+            <div class="grid grid-cols-1 md:grid-cols-12">
+                <!-- Columna Izquierda: Contenido e información -->
+                <div class="md:col-span-7 p-6 md:p-8 flex flex-col justify-center space-y-4 text-left">
+                    <span class="inline-flex items-center gap-1.5 self-start px-3 py-1.5 rounded-full text-[10px] md:text-xs font-extrabold bg-white/10 text-fresh-pink border border-white/15 uppercase tracking-wide">
+                        🍦 Helado Soft Artesanal de Autor
+                    </span>
+                    
+                    <h2 id="banner-title-display" class="font-serif text-3xl md:text-4xl font-black leading-tight tracking-tight text-white drop-shadow-sm">
+                        Refresca y endulza tu vida
+                    </h2>
+                    
+                    <p id="banner-desc-display" class="text-xs md:text-sm text-neutral-300 leading-relaxed font-light">
+                        Disfruta de nuestros espectaculares helados soft creados con ingredientes de la más alta calidad, granizados naturales, fresas locas y exquisitas sodas frutales en Inírida.
+                    </p>
+                    
+                    <!-- Fila de Horarios y Sucursales -->
+                    <div class="flex flex-wrap gap-2 pt-2">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-bold bg-fresh-pink text-fresh-purple shadow-sm">
+                            <i class="fa-solid fa-clock"></i> Todos los días: 2pm - 9pm
+                        </span>
+                        
+                        <a href="https://maps.google.com/?q=Punto+Fresh+Inirida" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-bold bg-white/5 hover:bg-white/10 text-white border border-white/15 transition duration-200">
+                            <i class="fa-solid fa-location-dot text-fresh-pink"></i> Punto Fresh
+                        </a>
+                        
+                        <a href="https://maps.google.com/?q=Punto+Fresh+Nativos+Inirida" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-bold bg-white/5 hover:bg-white/10 text-white border border-white/15 transition duration-200">
+                            <i class="fa-solid fa-location-dot text-fresh-pink"></i> Punto Fresh Nativos
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Columna Derecha: Contenedor con Fusión de Degradados Líquidos (Evita el parche) -->
+                <div class="md:col-span-5 relative min-h-[220px] md:min-h-[300px] overflow-hidden bg-fresh-dark">
+                    <!-- Imagen Promocional 1:1 -->
+                    <img id="banner-img-display" src="https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png" alt="Toppings" class="w-full h-full object-cover transition-transform duration-700 hover:scale-105" onerror="this.onerror=null;this.src='https://placehold.co/400x400/2E062B/white?text=Punto+Fresh';">
+                    
+                    <!-- Degradado de fusión para computadoras (Izquierda a Derecha) -->
+                    <div class="absolute inset-0 bg-gradient-to-r from-fresh-purple via-fresh-purple/40 to-transparent pointer-events-none hidden md:block w-[35%]"></div>
+                    <!-- Degradado de fusión para móviles (Abajo hacia Arriba) -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-fresh-purple via-fresh-purple/40 to-transparent pointer-events-none block md:hidden h-[35%] top-auto"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BUSCADOR -->
+        <div class="relative w-full max-w-lg mx-auto">
+            <input type="text" id="search-input" oninput="filterProducts()" placeholder="¿Qué se te antoja hoy? Buscar helado..." class="w-full bg-white border border-fresh-pink/30 py-3.5 pl-12 pr-4 rounded-2xl text-sm font-semibold outline-none shadow-sm focus:ring-2 focus:ring-fresh-purple/20 focus:border-fresh-purple transition-all placeholder:text-neutral-400">
+            <i class="fa-solid fa-magnifying-glass absolute left-4.5 top-1/2 -translate-y-1/2 text-fresh-purple/60 text-base"></i>
+        </div>
+
+        <!-- SECCIÓN DE TEMPORADA / ESPECIAL (Con marco y flechas deslizables) -->
+        <section id="special-showcase" class="hidden">
+            <div class="flex items-center gap-2.5 mb-4">
+                <span class="text-xl">⭐</span>
+                <h2 class="font-serif text-lg md:text-xl font-bold text-fresh-purple uppercase tracking-wide">Especiales de Temporada</h2>
+            </div>
+            
+            <!-- Marco decorativo premium para los especiales -->
+            <div class="relative bg-white border-2 border-dashed border-fresh-gold/60 rounded-3xl p-4 md:p-6 shadow-md">
+                <!-- Flecha de Desplazamiento Izquierda -->
+                <button onclick="scrollSpecials('left')" class="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-fresh-purple text-white w-9 h-9 rounded-full shadow-lg hover:bg-fresh-dark flex items-center justify-center active:scale-90 transition">
+                    <i class="fa-solid fa-chevron-left text-sm"></i>
+                </button>
+                
+                <!-- Contenedor Desplazable -->
+                <div id="specials-slider" class="flex gap-4 overflow-x-auto pb-2 scroll-smooth no-scrollbar select-none"></div>
+                
+                <!-- Flecha de Desplazamiento Derecha -->
+                <button onclick="scrollSpecials('right')" class="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-fresh-purple text-white w-9 h-9 rounded-full shadow-lg hover:bg-fresh-dark flex items-center justify-center active:scale-90 transition">
+                    <i class="fa-solid fa-chevron-right text-sm"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- FILTROS DE CATEGORÍA DESLIZABLES -->
+        <section class="sticky top-0 bg-fresh-cream/90 backdrop-blur-md py-3 z-30 -mx-4 px-4 border-b border-fresh-pink/10">
+            <div class="flex gap-2 overflow-x-auto no-scrollbar" id="category-pills-container"></div>
+        </section>
+
+        <!-- GRID DE PRODUCTOS -->
+        <section class="flex-grow">
+            <div id="menu-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5"></div>
+            <div id="empty-state" class="hidden text-center py-12 text-neutral-400">
+                <i class="fa-solid fa-ice-cream text-4xl mb-3 text-fresh-pink/50"></i>
+                <p class="text-xs">No encontramos helados en esta sección. ¡Busca en otra categoría!</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER CLIENTES -->
+    <footer class="bg-fresh-purple text-fresh-lightPurple py-8 border-t-4 border-fresh-pink shrink-0">
+        <div class="max-w-5xl mx-auto px-4 flex flex-col items-center gap-5 text-center">
+            
+            <!-- Botón Cápsula del Directorio Inírida Comercial (Ref. image_74bf5d.png) -->
+            <a href="https://iniridacomercial.vercel.app/" target="_blank" class="inline-flex items-center gap-2 bg-[#F29400] hover:bg-[#E08600] text-fresh-purple font-extrabold px-7 py-3 rounded-full shadow-lg transition duration-300 text-xs md:text-sm uppercase tracking-wider transform hover:scale-105 active:scale-95">
+                <i class="fa-solid fa-map-location-dot text-sm"></i>
+                <span>Ver en el Directorio Inírida Comercial</span>
+            </a>
+
+            <!-- Copyright Oficial (Ref. image_74bf5d.png) -->
+            <p class="text-xs md:text-sm text-fresh-cream/95 font-medium tracking-wide mt-2">
+                © 2026 PUNTO FRESH. "Refresca y endulza tu vida" - Helado Soft Artesanal.
+            </p>
+
+            <!-- Atribución de Desarrollador JrNaranjo (Ref. image_74bf5d.png) -->
+            <p class="text-[10px] md:text-xs text-neutral-400 font-light tracking-wide">
+                Plataforma desarrollada por <span class="font-bold text-white">JrNaranjo</span> | 
+                <a href="https://wa.me/573102881717" target="_blank" class="hover:text-fresh-pink transition duration-200 inline-flex items-center gap-1 font-semibold">
+                    <i class="fa-brands fa-whatsapp text-emerald-400 text-sm"></i> WhatsApp: 3102881717
+                </a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- BOTÓN FLOTANTE CARRITO (MÓVIL) -->
+    <button onclick="toggleCartDrawer(true)" id="mobile-cart-btn" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40 bg-fresh-purple hover:bg-fresh-dark text-white p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 transform active:scale-95 transition-all border border-fresh-pink/20">
+        <div class="relative">
+            <i class="fa-solid fa-cart-shopping text-lg"></i>
+            <span id="cart-badge" class="absolute -top-3 -right-3 bg-fresh-pink text-fresh-purple font-extrabold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-fresh-purple">0</span>
+        </div>
+        <span class="font-bold text-xs pr-1 hidden sm:inline" id="cart-mobile-total">$0</span>
+    </button>
+
+    <!-- DRAWER / PANEL COMPLEMENTARIO DE CARRITO -->
+    <div id="cart-drawer-overlay" class="fixed inset-0 bg-fresh-purple/75 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300" onclick="toggleCartDrawer(false)">
+        <div class="fixed right-0 top-0 bottom-0 max-w-md w-[88%] bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col" onclick="event.stopPropagation()" id="cart-drawer-panel">
+            
+            <!-- Cabecera -->
+            <div class="p-4 border-b border-fresh-pink/10 bg-fresh-lightPurple/50 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-ice-cream text-fresh-purple"></i>
+                    <h3 class="font-serif text-base font-black text-fresh-purple">Tu Pedido</h3>
+                </div>
+                <button onclick="toggleCartDrawer(false)" class="text-neutral-500 hover:text-fresh-purple p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <!-- Listado de Artículos -->
+            <div id="cart-drawer-items" class="flex-grow overflow-y-auto p-4 space-y-3">
+                <!-- Se inyecta dinámicamente -->
+            </div>
+
+            <!-- Formulario y Despacho (Mesa eliminada) -->
+            <div class="p-4 bg-neutral-50 border-t border-fresh-pink/10 text-xs space-y-3">
+                <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px]">Información de Despacho</p>
+                
+                <!-- Tipo de Servicio -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="setDeliveryType('Llevar')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
+                        <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Llevar / Recoger
+                    </button>
+                    <button onclick="setDeliveryType('Domicilio')" id="del-type-domicilio" class="py-2.5 rounded-xl font-bold border text-center transition-all">
+                        <i class="fa-solid fa-motorcycle block text-center mb-0.5 text-xs"></i> Domicilio
+                    </button>
+                </div>
+
+                <div class="space-y-2">
+                    <input type="text" id="cust-name" placeholder="Tu nombre *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
+                    
+                    <input type="number" id="cust-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-medium text-fresh-purple outline-none focus:border-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    
+                    <!-- Dirección condicional para Domicilio -->
+                    <div id="domicilio-fields" class="hidden space-y-2">
+                        <input type="text" id="cust-address" placeholder="Dirección completa del domicilio *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
+                        <input type="text" id="cust-address-obs" placeholder="Observaciones para llegar a la dirección * (ej. Casa verde)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
+                    </div>
+
+                    <input type="text" id="cust-comment" placeholder="¿Alguna instrucción? (Sin mani, extra salsa...)" class="w-full bg-white border border-fresh-pink/10 py-2 px-3 rounded-lg text-neutral-600 outline-none">
+                </div>
+
+                <!-- Método de Pago del Cliente -->
+                <div>
+                    <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px] mb-1.5">Método de Pago</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="setPaymentMethod('Efectivo')" id="pay-cash" class="py-2 rounded-xl font-bold border text-center">Efectivo</button>
+                        <button onclick="setPaymentMethod('Nequi')" id="pay-nequi" class="py-2 rounded-xl font-bold border text-center">Nequi</button>
+                        <button onclick="setPaymentMethod('Transferencia')" id="pay-trans" class="py-2 rounded-xl font-bold border text-center">Bancolombia</button>
+                    </div>
+                </div>
+
+                <!-- Campo condicional para pago en Efectivo (Con cuánto va a pagar) -->
+                <div id="cash-change-field" class="hidden">
+                    <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">¿Con cuánto billete vas a cancelar? *</label>
+                    <input type="text" id="cust-cash-bill" placeholder="Ej: Pago con billete de $50.000" class="w-full bg-white border border-fresh-pink/20 py-2 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
+                </div>
+            </div>
+
+            <!-- Footer del Drawer (Totales y Acción) -->
+            <div class="p-4 border-t border-fresh-pink/10 space-y-3 bg-white shrink-0">
+                <div class="space-y-1">
+                    <div class="flex justify-between text-xs text-neutral-500">
+                        <span>Subtotal:</span>
+                        <span id="drawer-subtotal">$0</span>
+                    </div>
+                    <!-- Fila de Costo de Envío Domicilio -->
+                    <div id="drawer-delivery-row" class="hidden flex justify-between text-xs text-neutral-500">
+                        <span>Costo Envío:</span>
+                        <span>$2.000</span>
+                    </div>
+                    <!-- Fila de Costo de Empaque Domicilio -->
+                    <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
+                        <span>Empaques ($1.000 c/u):</span>
+                        <span id="drawer-packaging-cost">$0</span>
+                    </div>
+                    <div class="flex justify-between font-extrabold text-lg text-fresh-purple">
+                        <span>Total:</span>
+                        <span id="drawer-total">$0</span>
+                    </div>
+                </div>
+                <button onclick="submitClientOrder()" class="w-full bg-fresh-purple hover:bg-fresh-dark text-white font-bold py-3.5 rounded-2xl text-xs shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane text-fresh-pink"></i> Enviar Pedido a Caja
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE NEGOCIO -->
+    <script>
+        const DB_PREFIX = "PUNTOFRESH_V1_";
+
+        // Parámetros por defecto editables
+        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717"; // Número de WhatsApp oficial modificable
+        let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros";
+        let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
+
+        // Parámetros de banners editables
+        let bannerTitle = localStorage.getItem(DB_PREFIX + 'bannerTitle') || "Refresca y endulza tu vida";
+        let bannerDesc = localStorage.getItem(DB_PREFIX + 'bannerDesc') || "Disfruta de nuestros espectaculares helados soft creados con ingredientes de la más alta calidad, granizados naturales, fresas locas y exquisitas sodas frutales en Inírida.";
+        let announcementMessage = localStorage.getItem(DB_PREFIX + 'announcementMessage') || "¡Ingredientes naturales seleccionados diariamente!";
+
+        // =========================================================================
+        // 💳 CONFIGURACIÓN DE CUENTAS DE PAGO (¡Modifícalas aquí o desde el LocalStorage!)
+        // =========================================================================
+        let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3228586808";
+        let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "71300000087977";
+
+        // --- DEFINICIÓN DE LAS CATEGORÍAS DIRECTAMENTE DESDE EL JAVASCRIPT ---
+        const APP_CATEGORIES = [
+            "Todos",
+            "Nativos y Saludables",
+            "Granizados",
+            "Kids",
+            "Gelato",
+            "Malteadas",
+            "Fresas Locas",
+            "Micheladas y Sodas"
+        ];
+
+        // Colecciones
+        let products = [];
+        let cart = [];
+        let selectedCategory = 'Todos';
+        let deliveryType = 'Llevar'; // Por defecto: 'Llevar' o 'Domicilio'
+        let paymentMethod = 'Nequi';
+
+        // Productos de demostración iniciales (en caso de que el catálogo esté vacío)
+        const DEFAULT_PRODUCTS = [
+            { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Nativos y Saludables", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
+            { id: "DEMO-2", name: "Granizado de Café", desc: "Café de origen granizado con un toque de crema de leche y salsa de caramelo.", category: "Granizados", measure: "Unidad", cost: 2500, price: 7500, stock: 40, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 8, isSpecial: false },
+            { id: "DEMO-3", name: "Gelato Frutos Rojos", desc: "Helado cremoso de frutos del bosque, sin adición de azúcar.", category: "Nativos y Saludables", measure: "Unidad", cost: 3000, price: 8000, stock: 35, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 22, isSpecial: true },
+            { id: "DEMO-4", name: "Cono Especial Kids", desc: "Mini cono de vainilla decorado con gomitas y chispas de colores.", category: "Kids", measure: "Unidad", cost: 1500, price: 4500, stock: 60, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 5, isSpecial: false },
+            { id: "DEMO-5", name: "Malteada Tentación Oreo", desc: "Cremosa malteada preparada con helado artesanal, galletas Oreo y chantilly.", category: "Malteadas", measure: "Unidad", cost: 3500, price: 9800, stock: 30, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 15, isSpecial: false }
+        ];
+
+        // --- SISTEMA DE NOTIFICACIONES TOAST ---
+        function showToast(msg, type='info') {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            const toast = document.createElement('div');
+            let bg = 'bg-fresh-purple border-fresh-pink/20';
+            if (type === 'success') bg = 'bg-emerald-600 border-white/20';
+            if (type === 'error') bg = 'bg-rose-600 border-white/20';
+            
+            toast.className = `mx-auto px-5 py-3 rounded-full text-white text-xs font-bold shadow-2xl transform transition-all duration-300 -translate-y-10 opacity-0 flex items-center justify-center gap-2 ${bg} border pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid fa-ice-cream text-fresh-pink"></i> <span>${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.remove('-translate-y-10', 'opacity-0'); }, 10);
+            setTimeout(() => { 
+                toast.classList.add('-translate-y-10', 'opacity-0'); 
+                setTimeout(() => toast.remove(), 300); 
+            }, 3000);
+        }
+
+        window.alert = function(msg) {
+            showToast(msg, 'info');
+        };
+
+        // --- INICIALIZAR APLICACIÓN DE FORMA COMPLETAMENTE SEGURA CONTRA CRASHES DE DOM ---
+        function initApp() {
+            if (document.getElementById('banner-title-display')) {
+                document.getElementById('banner-title-display').innerText = bannerTitle;
+            }
+            if (document.getElementById('banner-desc-display')) {
+                document.getElementById('banner-desc-display').innerText = bannerDesc;
+            }
+            if (document.getElementById('banner-img-display')) {
+                document.getElementById('banner-img-display').src = mainBannerImg;
+            }
+            if (document.getElementById('announcement-text-display')) {
+                document.getElementById('announcement-text-display').innerText = announcementMessage;
+            }
+
+            // Cargar productos de LocalStorage
+            const stored = localStorage.getItem(DB_PREFIX + 'products');
+            if (stored) {
+                products = JSON.parse(stored);
+            }
+            if (!products || products.length === 0) {
+                products = DEFAULT_PRODUCTS;
+                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+            }
+
+            // Construir categorías disponibles en base a la lista creada en el JS
+            buildCategoriesMenu();
+            renderSpecials();
+            renderProducts();
+            setDeliveryType('Llevar');
+            setPaymentMethod('Nequi');
+            updateCartBadge();
+        }
+
+        // --- GENERADOR DE MENÚ DE CATEGORÍAS (DESDE JAVASCRIPT) ---
+        function buildCategoriesMenu() {
+            const container = document.getElementById('category-pills-container');
+            if(!container) return;
+            container.innerHTML = '';
+
+            APP_CATEGORIES.forEach(cat => {
+                const isActive = cat === selectedCategory;
+                const icon = getCategoryIcon(cat);
+                container.innerHTML += `
+                    <button onclick="selectCategory('${cat}')" class="category-pill shrink-0 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all bg-white text-fresh-purple border border-fresh-pink/20 ${isActive ? 'active' : 'hover:bg-fresh-lightPurple'}">
+                        ${icon} ${cat}
+                    </button>
+                `;
+            });
+        }
+
+        function getCategoryIcon(cat) {
+            switch(cat) {
+                case 'Todos': return '<i class="fa-solid fa-border-all"></i>';
+                case 'Nativos y Saludables': return '<i class="fa-solid fa-leaf text-emerald-500"></i>';
+                case 'Granizados': return '<i class="fa-solid fa-snowflake text-cyan-400"></i>';
+                case 'Kids': return '<i class="fa-solid fa-face-laugh-beam text-amber-500"></i>';
+                case 'Gelato': return '<i class="fa-solid fa-ice-cream text-fresh-pink"></i>';
+                case 'Malteadas': return '<i class="fa-solid fa-glass-water-droplet"></i>';
+                case 'Fresas Locas': return '<i class="fa-solid fa-stroopwafel text-red-400"></i>';
+                case 'Micheladas y Sodas': return '<i class="fa-solid fa-whiskey-glass text-amber-600"></i>';
+                default: return '<i class="fa-solid fa-star text-fresh-gold"></i>';
+            }
+        }
+
+        function selectCategory(cat) {
+            selectedCategory = cat;
+            buildCategoriesMenu();
+            renderProducts();
+        }
+
+        // --- DESPLAZAMIENTO DEL CONTENEDOR DE ESPECIALES DE TEMPORADA ---
+        function scrollSpecials(direction) {
+            const slider = document.getElementById('specials-slider');
+            if(!slider) return;
+            const scrollAmount = 240; // Pixeles que desplaza cada flecha
+            if (direction === 'left') {
+                slider.scrollLeft -= scrollAmount;
+            } else {
+                slider.scrollLeft += scrollAmount;
+            }
+        }
+
+        // --- CARRETERA DE ESPECIALES DE TEMPORADA ---
+        function renderSpecials() {
+            const container = document.getElementById('specials-slider');
+            const section = document.getElementById('special-showcase');
+            if(!container || !section) return;
+            const specials = products.filter(p => p.isSpecial === true);
+
+            if (specials.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            container.innerHTML = '';
+
+            specials.forEach(p => {
+                container.innerHTML += `
+                    <div class="bg-fresh-lightPurple/40 border border-fresh-pink/30 rounded-2xl p-3 flex flex-col justify-between w-52 shrink-0 relative hover:border-fresh-pink transition duration-300">
+                        <span class="absolute top-2 right-2 bg-fresh-purple text-fresh-pink text-[8px] font-black uppercase px-2 py-0.5 rounded-full z-10">⭐ Especial</span>
+                        <img src="${p.img}" alt="${p.name}" class="h-28 w-full object-cover rounded-xl mb-2 bg-fresh-purple/5" onerror="this.onerror=null;this.src='https://placehold.co/150x120/2E062B/white?text=Helado';">
+                        <div class="flex-grow">
+                            <h4 class="font-serif text-xs font-bold text-fresh-dark truncate uppercase">${p.name}</h4>
+                            <p class="text-[10px] text-neutral-500 line-clamp-1 mb-1.5">${p.desc || 'Edición especial.'}</p>
+                        </div>
+                        <div class="flex items-center justify-between mt-1">
+                            <span class="font-extrabold text-sm text-fresh-purple">$${p.price.toLocaleString()}</span>
+                            <button onclick="addToCart('${p.id}')" class="bg-fresh-purple text-white hover:bg-fresh-dark p-2 rounded-lg text-xs transition transform active:scale-90"><i class="fa-solid fa-plus"></i> Agregar</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- FILTRAR Y RENDERIZAR HELADOS ---
+        function renderProducts() {
+            const grid = document.getElementById('menu-grid');
+            const emptyState = document.getElementById('empty-state');
+            if(!grid || !emptyState) return;
+            const search = document.getElementById('search-input').value.toLowerCase();
+
+            let filtered = products;
+
+            // Filtro por categoría
+            if (selectedCategory !== 'Todos') {
+                filtered = filtered.filter(p => p.category === selectedCategory);
+            }
+
+            // Filtro por búsqueda de texto
+            if (search) {
+                filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || (p.desc && p.desc.toLowerCase().includes(search)));
+            }
+
+            if (filtered.length === 0) {
+                grid.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            grid.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+            grid.innerHTML = '';
+
+            filtered.forEach(p => {
+                grid.innerHTML += `
+                    <div class="bg-white rounded-2xl border border-fresh-pink/15 overflow-hidden flex flex-col justify-between hover:border-fresh-pink/35 shadow-sm transition-all duration-300 transform hover:-translate-y-0.5">
+                        <div class="relative bg-fresh-lightPurple/20">
+                            <img src="${p.img}" alt="${p.name}" class="w-full h-40 object-cover bg-fresh-purple/5" onerror="this.onerror=null;this.src='https://placehold.co/300x160/2E062B/white?text=Helado';">
+                            ${p.isSpecial ? '<span class="absolute top-2.5 left-2.5 bg-fresh-purple text-white text-[8px] font-extrabold tracking-wider uppercase px-2.5 py-0.5 rounded-full">⭐ Favorito</span>' : ''}
+                        </div>
+                        <div class="p-4 flex-grow flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-start justify-between gap-1 mb-1">
+                                    <h3 class="font-serif font-black text-sm md:text-base text-fresh-dark uppercase leading-tight">${p.name}</h3>
+                                    <span class="text-[9px] bg-fresh-lightPurple text-fresh-purple font-bold px-2 py-0.5 rounded-md shrink-0 border border-fresh-pink/10">${p.porcion || 'Estándar'}</span>
+                                </div>
+                                <p class="text-[11px] text-neutral-500 line-clamp-2 leading-normal mb-3">${p.desc || 'Formulación natural preparada con el mejor helado artesanal de la ciudad.'}</p>
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-neutral-50">
+                                <span class="font-black text-base text-fresh-purple">$${p.price.toLocaleString()}</span>
+                                <button onclick="addToCart('${p.id}')" class="bg-fresh-purple hover:bg-fresh-dark text-white font-extrabold text-xs py-2 px-3 rounded-xl shadow-sm transition transform active:scale-95 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-cart-plus"></i> Pedir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function filterProducts() {
+            renderProducts();
+        }
+
+        // ==========================================
+        // 🛒 GESTIÓN INTERNA DEL CARRITO DE COMPRAS
+        // ==========================================
+        function toggleCartDrawer(open) {
+            const overlay = document.getElementById('cart-drawer-overlay');
+            const panel = document.getElementById('cart-drawer-panel');
+            if(!overlay || !panel) return;
+
+            if(open) {
+                overlay.classList.remove('pointer-events-none', 'opacity-0');
+                panel.classList.remove('translate-x-full');
+                renderCartDrawerItems();
+            } else {
+                overlay.classList.add('pointer-events-none', 'opacity-0');
+                panel.classList.add('translate-x-full');
+            }
+        }
+
+        function addToCart(id) {
+            const p = products.find(x => x.id === id);
+            if (!p) return;
+
+            let exist = cart.find(i => i.id === id);
+            if (exist) {
+                exist.quantity++;
+            } else {
+                cart.push({ id: p.id, name: p.name, price: p.price, quantity: 1, category: p.category });
+            }
+
+            updateCartBadge();
+            showToast(`¡${p.name} agregado al carrito!`, 'success');
+        }
+
+        function updateCartQty(idx, delta) {
+            cart[idx].quantity += delta;
+            if(cart[idx].quantity <= 0) {
+                cart.splice(idx, 1);
+            }
+            updateCartBadge();
+            renderCartDrawerItems();
+        }
+
+        function updateCartBadge() {
+            const badge = document.getElementById('cart-badge');
+            const mobileBtn = document.getElementById('mobile-cart-btn');
+            if(!badge || !mobileBtn) return;
+            const count = cart.reduce((s, i) => s + i.quantity, 0);
+            
+            badge.innerText = count;
+
+            let total = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+            document.getElementById('cart-mobile-total').innerText = `$${total.toLocaleString()}`;
+
+            if(count > 0) {
+                mobileBtn.classList.remove('scale-0');
+            } else {
+                mobileBtn.classList.add('scale-0');
+            }
+        }
+
+        function renderCartDrawerItems() {
+            const container = document.getElementById('cart-drawer-items');
+            if(!container) return;
+            container.innerHTML = '';
+
+            if (cart.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-16 text-neutral-400">
+                        <i class="fa-solid fa-basket-shopping text-3xl mb-2 text-fresh-pink/40"></i>
+                        <p class="text-xs">Tu carrito está vacío.</p>
+                    </div>
+                `;
+                updateDrawerTotals();
+                return;
+            }
+
+            cart.forEach((item, idx) => {
+                container.innerHTML += `
+                    <div class="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-fresh-pink/10 text-xs">
+                        <div class="max-w-[70%]">
+                            <p class="font-bold text-fresh-purple truncate uppercase">${item.name}</p>
+                            <p class="text-[10px] text-neutral-400">$${item.price.toLocaleString()} c/u</p>
+                        </div>
+                        <div class="flex items-center gap-2.5">
+                            <div class="flex items-center border border-fresh-pink/30 rounded-lg overflow-hidden bg-white">
+                                <button onclick="updateCartQty(${idx}, -1)" class="px-2 py-1 text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-minus text-[9px]"></i></button>
+                                <span class="px-2 font-black text-fresh-purple text-[11px]">${item.quantity}</span>
+                                <button onclick="updateCartQty(${idx}, 1)" class="px-2 py-1 text-fresh-purple hover:bg-fresh-lightPurple"><i class="fa-solid fa-plus text-[9px]"></i></button>
+                            </div>
+                            <span class="font-extrabold text-fresh-purple">$${(item.price * item.quantity).toLocaleString()}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            updateDrawerTotals();
+        }
+
+        function updateDrawerTotals() {
+            const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
+
+            // Regla de envío: $2.000 domicilio + $1.000 empaque por cada helado
+            const deliveryCost = (deliveryType === 'Domicilio') ? 2000 : 0;
+            const packagingCost = (deliveryType === 'Domicilio') ? (totalItemsQty * 1000) : 0;
+
+            const total = subtotal + deliveryCost + packagingCost;
+
+            document.getElementById('drawer-subtotal').innerText = `$${subtotal.toLocaleString()}`;
+            document.getElementById('drawer-total').innerText = `$${total.toLocaleString()}`;
+
+            const deliveryRow = document.getElementById('drawer-delivery-row');
+            const packagingRow = document.getElementById('drawer-packaging-row');
+
+            if (deliveryType === 'Domicilio') {
+                deliveryRow.classList.remove('hidden');
+                packagingRow.classList.remove('hidden');
+                document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
+            } else {
+                deliveryRow.classList.add('hidden');
+                packagingRow.classList.add('hidden');
+            }
+        }
+
+        // --- SISTEMA DESPACHO DEL CLIENTE ---
+        function setDeliveryType(type) {
+            deliveryType = type;
+            document.getElementById('del-type-llevar').className = type === 'Llevar' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
+            document.getElementById('del-type-domicilio').className = type === 'Domicilio' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
+
+            const domicilioFields = document.getElementById('domicilio-fields');
+
+            if (type === 'Domicilio') {
+                domicilioFields.classList.remove('hidden');
+            } else {
+                domicilioFields.classList.add('hidden');
+            }
+            updateDrawerTotals();
+        }
+
+        function setPaymentMethod(method) {
+            paymentMethod = method;
+            document.getElementById('pay-cash').className = method === 'Efectivo' ? "py-2 rounded-xl font-bold border-2 border-fresh-purple bg-fresh-lightPurple text-fresh-purple" : "py-2 rounded-xl font-bold border text-neutral-500 bg-white hover:bg-neutral-50";
+            document.getElementById('pay-nequi').className = method === 'Nequi' ? "py-2 rounded-xl font-bold border-2 border-fresh-purple bg-fresh-lightPurple text-fresh-purple" : "py-2 rounded-xl font-bold border text-neutral-500 bg-white hover:bg-neutral-50";
+            document.getElementById('pay-trans').className = method === 'Transferencia' ? "py-2 rounded-xl font-bold border-2 border-fresh-purple bg-fresh-lightPurple text-fresh-purple" : "py-2 rounded-xl font-bold border text-neutral-500 bg-white hover:bg-neutral-50";
+
+            // Mostrar el campo de vueltas sólo si es en Efectivo
+            const cashChangeField = document.getElementById('cash-change-field');
+            if (method === 'Efectivo') {
+                cashChangeField.classList.remove('hidden');
+            } else {
+                cashChangeField.classList.add('hidden');
+            }
+        }
+
+        // ==========================================
+        // 🚀 PROCESO DE REGISTRO Y ENVÍO DE PEDIDOS
+        // ==========================================
+        function submitClientOrder() {
+            if (cart.length === 0) {
+                showToast("Tu carrito se encuentra vacío.", "error");
+                return;
+            }
+
+            const name = document.getElementById('cust-name').value.trim();
+            const phone = document.getElementById('cust-phone').value.trim();
+            const comment = document.getElementById('cust-comment').value.trim();
+            
+            // Campos de Domicilio
+            const address = document.getElementById('cust-address').value.trim();
+            const addressObs = document.getElementById('cust-address-obs').value.trim();
+            
+            // Campo de Efectivo
+            const cashBill = document.getElementById('cust-cash-bill').value.trim();
+
+            if (!name || !phone) {
+                showToast("Por favor ingresa tu Nombre y Celular.", "error");
+                return;
+            }
+
+            if (deliveryType === 'Domicilio') {
+                if (!address || !addressObs) {
+                    showToast("Por favor ingresa la dirección completa y observaciones para la entrega.", "error");
+                    return;
+                }
+            }
+
+            if (paymentMethod === 'Efectivo' && !cashBill) {
+                showToast("Por favor indica con qué billete vas a cancelar para llevar tus vueltas.", "error");
+                return;
+            }
+
+            const rawSubtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
+
+            const deliveryFee = (deliveryType === 'Domicilio') ? 2000 : 0;
+            const packagingFee = (deliveryType === 'Domicilio') ? (totalItemsQty * 1000) : 0;
+            const finalTotal = rawSubtotal + deliveryFee + packagingFee;
+
+            // Construir el objeto de pedido web
+            const orderId = "PF-WEB-" + Math.floor(1000 + Math.random() * 9000);
+            const newWebOrder = {
+                id: orderId,
+                date: new Date().toLocaleString(),
+                clientName: name,
+                clientPhone: phone,
+                delivery: deliveryType,
+                mesa_o_direccion: deliveryType === 'Domicilio' ? `${address} (${addressObs})` : 'Recoge en Local',
+                payment: paymentMethod,
+                items: [...cart],
+                total: finalTotal,
+                comment: comment,
+                status: 'Pendiente'
+            };
+
+            // 1. Guardar en LocalStorage para alertar al POS (pos.html)
+            let pending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
+            pending.push(newWebOrder);
+            localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pending));
+
+            // 2. Disparar evento de storage manualmente
+            window.dispatchEvent(new Event('storage'));
+
+            // 3. Crear mensaje de WhatsApp estructurado y limpio para confirmación externa del cliente
+            const waMessage = buildWhatsAppMessage(newWebOrder, rawSubtotal, deliveryFee, packagingFee, finalTotal, addressObs, cashBill);
+            const waUrl = `https://wa.me/57${companyPhone}?text=${encodeURIComponent(waMessage)}`;
+
+            // 4. Limpiar estado de la aplicación
+            cart = [];
+            updateCartBadge();
+            toggleCartDrawer(false);
+            
+            // Limpiar inputs
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-phone').value = '';
+            document.getElementById('cust-address').value = '';
+            document.getElementById('cust-address-obs').value = '';
+            document.getElementById('cust-comment').value = '';
+            document.getElementById('cust-cash-bill').value = '';
+
+            // 5. Alerta final y redirección a WhatsApp
+            showToast("¡Pedido enviado a la caja con éxito!", "success");
+            setTimeout(() => {
+                window.open(waUrl, '_blank');
+            }, 1000);
+        }
+
+        function buildWhatsAppMessage(order, subtotal, delivery, empaque, total, obs, cashBill) {
+            let msg = `🍦 *¡HOLA! GRACIAS POR TU PEDIDO EN PUNTO FRESH* 🍦\n`;
+            msg += `Aquí tienes el detalle de tu compra:\n`;
+            msg += `------------------------------------\n`;
+            msg += `*Ref:* #${order.id}\n`;
+            msg += `*Cliente:* ${order.clientName}\n`;
+            msg += `*Celular:* ${order.clientPhone}\n`;
+            msg += `*Tipo de Entrega:* ${order.delivery}\n`;
+            
+            if (order.delivery === 'Domicilio') {
+                msg += `*Dirección:* ${order.mesa_o_direccion}\n`;
+                msg += `*Cómo llegar (Indicaciones):* ${obs}\n`;
+            }
+
+            msg += `*Método de Pago:* ${order.payment}\n`;
+            if (order.comment) msg += `*Comentarios:* _${order.comment}_\n`;
+            msg += `------------------------------------\n`;
+            msg += `*PRODUCTOS:*\n`;
+
+            order.items.forEach(item => {
+                msg += `• ${item.quantity}x ${item.name} ($${(item.price * item.quantity).toLocaleString()})\n`;
+            });
+
+            msg += `------------------------------------\n`;
+            msg += `*Subtotal:* $${subtotal.toLocaleString()}\n`;
+            if (delivery > 0) {
+                msg += `*Domicilio:* $${delivery.toLocaleString()}\n`;
+                msg += `*Empaques ($1.000 c/u):* $${empaque.toLocaleString()}\n`;
+            }
+            msg += `*TOTAL NETO A PAGAR:* $${total.toLocaleString()}\n\n`;
+            
+            // Instrucciones de Pago Condicionales
+            msg += `*INSTRUCCIONES DE PAGO:*\n`;
+            if (order.payment === 'Nequi') {
+                msg += `📲 Envíanos tu transferencia por Nequi al celular: *${companyNequi}*\n`;
+                msg += `⚠️ *Por favor, reenvíanos el pantallazo de tu pago por este chat para confirmar el pedido.* ⚠️\n\n`;
+            } else if (order.payment === 'Transferencia') {
+                msg += `🏦 Realiza tu transferencia a:\n`;
+                msg += `*Cuenta de Ahorros Bancolombia No. ${companyBancolombia}*\n`;
+                msg += `⚠️ *Por favor, reenvíanos el pantallazo del pago para proceder a confirmar tu pedido.* ⚠️\n\n`;
+            } else if (order.payment === 'Efectivo') {
+                msg += `💵 *Cancela al entregar:* ${cashBill}\n`;
+                msg += `_(El domiciliario llevará las vueltas correspondientes)_\n\n`;
+            }
+
+            msg += `✅ _Tu pedido ya está en preparación y pronto será entregado. ¡Que disfrutes tu helado!_ 🍦`;
+            return msg;
+        }
+
+        // --- ESCUCHADOR DE ACTUALIZACIONES EXTERNAS DEL CATÁLOGO ---
+        window.addEventListener('storage', function(e) {
+            if (e.key === DB_PREFIX + 'products') {
+                products = JSON.parse(e.newValue || '[]');
+                buildCategoriesMenu();
+                renderSpecials();
+                renderProducts();
+            }
+            if (e.key === DB_PREFIX + 'companyPhone') {
+                companyPhone = e.newValue || "3102881717";
+            }
+            if (e.key === DB_PREFIX + 'companyAddress') {
+                companyAddress = e.newValue || "Calle 21 #9-57, Barrio Comuneros";
+            }
+            if (e.key === DB_PREFIX + 'bannerTitle') {
+                bannerTitle = e.newValue || "Refresca y endulza tu vida";
+                if (document.getElementById('banner-title-display')) {
+                    document.getElementById('banner-title-display').innerText = bannerTitle;
+                }
+            }
+            if (e.key === DB_PREFIX + 'bannerDesc') {
+                bannerDesc = e.newValue || "Disfruta de nuestros espectaculares...";
+                if (document.getElementById('banner-desc-display')) {
+                    document.getElementById('banner-desc-display').innerText = bannerDesc;
+                }
+            }
+            if (e.key === DB_PREFIX + 'mainBannerImg') {
+                mainBannerImg = e.newValue || "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
+                if (document.getElementById('banner-img-display')) {
+                    document.getElementById('banner-img-display').src = mainBannerImg;
+                }
+            }
+            if (e.key === DB_PREFIX + 'announcementMessage') {
+                announcementMessage = e.newValue || "¡Ingredientes naturales seleccionados diariamente!";
+                if (document.getElementById('announcement-text-display')) {
+                    document.getElementById('announcement-text-display').innerText = announcementMessage;
+                }
+            }
+            if (e.key === DB_PREFIX + 'companyNequi') {
+                companyNequi = e.newValue || "3228586808";
+            }
+            if (e.key === DB_PREFIX + 'companyBancolombia') {
+                companyBancolombia = e.newValue || "71300000087977";
+            }
+        });
+    </script>
+</body>
+</html>
