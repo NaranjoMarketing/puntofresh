@@ -273,7 +273,7 @@
                     </div>
                     <!-- Fila de Costo de Empaque Domicilio -->
                     <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
-                        <span>Empaques ($1.000 c/u):</span>
+                        <span>Empaques ($2.000 c/u):</span>
                         <span id="drawer-packaging-cost">$0</span>
                     </div>
                     <div class="flex justify-between font-extrabold text-lg text-fresh-purple">
@@ -637,9 +637,9 @@
             const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
             const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
 
-            // Regla de envío: $2.000 domicilio + $1.000 empaque por cada helado
+            // Regla de envío: $2.000 domicilio + $2.000 empaque por cada helado
             const deliveryCost = (deliveryType === 'Domicilio') ? 2000 : 0;
-            const packagingCost = (deliveryType === 'Domicilio') ? (totalItemsQty * 1000) : 0;
+            const packagingCost = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
 
             const total = subtotal + deliveryCost + packagingCost;
 
@@ -731,7 +731,7 @@
             const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
 
             const deliveryFee = (deliveryType === 'Domicilio') ? 2000 : 0;
-            const packagingFee = (deliveryType === 'Domicilio') ? (totalItemsQty * 1000) : 0;
+            const packagingFee = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
             const finalTotal = rawSubtotal + deliveryFee + packagingFee;
 
             // Construir el objeto de pedido web
@@ -783,51 +783,36 @@
         }
 
         function buildWhatsAppMessage(order, subtotal, delivery, empaque, total, obs, cashBill) {
-            let msg = `🍦 *¡HOLA! GRACIAS POR TU PEDIDO EN PUNTO FRESH* 🍦\n`;
-            msg += `Aquí tienes el detalle de tu compra:\n`;
+            let msg = `🍦 *¡Hola! Aquí está mi pedido para Punto Fresh Inírida* 🍦\n`;
             msg += `------------------------------------\n`;
-            msg += `*Ref:* #${order.id}\n`;
             msg += `*Cliente:* ${order.clientName}\n`;
-            msg += `*Celular:* ${order.clientPhone}\n`;
-            msg += `*Tipo de Entrega:* ${order.delivery}\n`;
-            
-            if (order.delivery === 'Domicilio') {
-                msg += `*Dirección:* ${order.mesa_o_direccion}\n`;
-                msg += `*Cómo llegar (Indicaciones):* ${obs}\n`;
-            }
-
-            msg += `*Método de Pago:* ${order.payment}\n`;
-            if (order.comment) msg += `*Comentarios:* _${order.comment}_\n`;
+            msg += `*Servicio:* ${order.delivery} ${order.delivery === 'Domicilio' ? '(' + order.mesa_o_direccion + ')' : ''}\n`;
+            if (order.comment) msg += `*Notas:* _${order.comment}_\n`;
             msg += `------------------------------------\n`;
+            
             msg += `*PRODUCTOS:*\n`;
-
             order.items.forEach(item => {
-                msg += `• ${item.quantity}x ${item.name} ($${(item.price * item.quantity).toLocaleString()})\n`;
+                msg += `• ${item.quantity}x ${item.name}\n`;
             });
-
             msg += `------------------------------------\n`;
-            msg += `*Subtotal:* $${subtotal.toLocaleString()}\n`;
-            if (delivery > 0) {
-                msg += `*Domicilio:* $${delivery.toLocaleString()}\n`;
-                msg += `*Empaques ($1.000 c/u):* $${empaque.toLocaleString()}\n`;
-            }
-            msg += `*TOTAL NETO A PAGAR:* $${total.toLocaleString()}\n\n`;
+            msg += `*Total Pedido:* $${total.toLocaleString()}\n`;
+            msg += `------------------------------------\n`;
             
-            // Instrucciones de Pago Condicionales
-            msg += `*INSTRUCCIONES DE PAGO:*\n`;
+            msg += `*Forma de Pago:* ${order.payment}\n`;
             if (order.payment === 'Nequi') {
-                msg += `📲 Envíanos tu transferencia por Nequi al celular: *${companyNequi}*\n`;
-                msg += `⚠️ *Por favor, reenvíanos el pantallazo de tu pago por este chat para confirmar el pedido.* ⚠️\n\n`;
+                msg += `👉 me dispondre a enviar al número siguiente Nequi *${companyNequi}* para cancelar el valor del pedido.\n`;
             } else if (order.payment === 'Transferencia') {
-                msg += `🏦 Realiza tu transferencia a:\n`;
-                msg += `*Cuenta de Ahorros Bancolombia No. ${companyBancolombia}*\n`;
-                msg += `⚠️ *Por favor, reenvíanos el pantallazo del pago para proceder a confirmar tu pedido.* ⚠️\n\n`;
+                msg += `👉 me dispondre a enviar al número siguiente Bancolombia Ahorros No. *${companyBancolombia}* para cancelar el valor del pedido.\n`;
             } else if (order.payment === 'Efectivo') {
-                msg += `💵 *Cancela al entregar:* ${cashBill}\n`;
-                msg += `_(El domiciliario llevará las vueltas correspondientes)_\n\n`;
+                msg += `👉 Cancelaré con: *${cashBill || 'Efectivo'}*\n`;
             }
-
-            msg += `✅ _Tu pedido ya está en preparación y pronto será entregado. ¡Que disfrutes tu helado!_ 🍦`;
+            
+            msg += `------------------------------------\n`;
+            if (order.payment === 'Efectivo') {
+                msg += `Envia este mensaje para confirmar tu pedido!`;
+            } else {
+                msg += `Envia este mensaje para confirmar tu pedido, con la captura de pantalla de la transferencia`;
+            }
             return msg;
         }
 
