@@ -288,9 +288,60 @@
         </div>
     </div>
 
+    <!-- MODAL DE TOPPINGS -->
+    <div id="toppings-modal" class="fixed inset-0 z-[200] bg-fresh-purple/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="toppings-box">
+            <div class="flex items-center gap-2 mb-1">
+                <i class="fa-solid fa-wand-magic-sparkles text-fresh-pink"></i>
+                <h3 class="font-serif text-lg font-bold text-fresh-purple">Selecciona tus Toppings</h3>
+            </div>
+            <p id="toppings-subtitle" class="text-xs text-neutral-500 mb-4 font-bold">Puedes elegir hasta <span id="toppings-max-count" class="text-fresh-purple text-sm font-black"></span> opciones.</p>
+
+            <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="toppings-list">
+                <!-- Los checkboxes de los toppings se inyectan aquí dinámicamente -->
+            </div>
+
+            <div class="flex gap-3 justify-end shrink-0 pt-4 border-t border-fresh-pink/10">
+                <button onclick="closeToppingsModal()" class="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition-all shadow-sm">Cancelar</button>
+                <button onclick="confirmToppingsSelection()" class="px-5 py-2.5 bg-fresh-purple hover:bg-fresh-dark text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"><i class="fa-solid fa-check text-fresh-pink"></i> Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SCRIPT DE NEGOCIO -->
     <script>
         const DB_PREFIX = "PUNTOFRESH_V1_";
+
+        // URL DE TU GOOGLE APPS SCRIPT (Asegúrate de que sea la misma del POS)
+        const URL_API = 'https://script.google.com/macros/s/AKfycbyEMUFe0c-Nelpo_Q7OShxYwzodE_Pd1NAJDoblCKr-RJDkyGU2208deURVIFSMgk3x/exec';
+
+        // --- SINCRONIZACIÓN CON LA NUBE ---
+        async function loadDataFromCloud() {
+            try {
+                if (!URL_API || URL_API.includes("REEMPLAZAR")) return;
+                
+                const response = await fetch(URL_API);
+                const data = await response.json();
+                
+                if(data) {
+                    if(data.products && data.products.length > 0) {
+                        products = data.products;
+                        localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                    }
+                    if(data.config) {
+                        if(data.config.company_phone) companyPhone = data.config.company_phone;
+                        if(data.config.main_banner_img) mainBannerImg = data.config.main_banner_img;
+                    }
+                }
+            } catch (err) {
+                console.warn("Usando datos locales (Modo Offline).", err);
+            }
+            
+            // Refrescar la vista después de descargar
+            buildCategoriesMenu();
+            renderSpecials();
+            renderProducts();
+        }
 
         // Parámetros por defecto editables
         let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717"; // Número de WhatsApp oficial modificable
@@ -391,6 +442,9 @@
             setDeliveryType('Llevar');
             setPaymentMethod('Nequi');
             updateCartBadge();
+            
+            // Lanzar sincronización en segundo plano al abrir la página
+            loadDataFromCloud();
         }
 
         // --- GENERADOR DE MENÚ DE CATEGORÍAS (DESDE JAVASCRIPT) ---
@@ -553,15 +607,44 @@
             }
         }
 
-        function addToCart(id) {
+        function addToCart(id, selectedToppings = null) {
             const p = products.find(x => x.id === id);
             if (!p) return;
 
-            let exist = cart.find(i => i.id === id);
+            // Detección automática de la cantidad de toppings basada en el texto del producto
+            let maxToppings = 0;
+            const textToCheck = (p.name + " " + (p.desc || "")).toLowerCase();
+            const match = textToCheck.match(/(1|2|3|4|5|un|uno|dos|tres|cuatro|cinco)\s+toppings?/i);
+            
+            if (match && selectedToppings === null) {
+                let numStr = match[1];
+                if (['1', 'un', 'uno'].includes(numStr)) maxToppings = 1;
+                if (['2', 'dos'].includes(numStr)) maxToppings = 2;
+                if (['3', 'tres'].includes(numStr)) maxToppings = 3;
+                if (['4', 'cuatro'].includes(numStr)) maxToppings = 4;
+                if (['5', 'cinco'].includes(numStr)) maxToppings = 5;
+
+                if (maxToppings > 0) {
+                    openToppingsModal(id, maxToppings);
+                    return; 
+                }
+            }
+
+            let cartId = id;
+            let finalName = p.name;
+            
+            // Si el cliente seleccionó toppings, creamos una variante para no agruparlos incorrectamente
+            if (selectedToppings && selectedToppings.length > 0) {
+                const toppingsStr = selectedToppings.join(', ');
+                cartId = id + '_' + btoa(toppingsStr).substring(0, 8);
+                finalName = p.name + ' (+ ' + toppingsStr + ')';
+            }
+
+            let exist = cart.find(i => i.id === cartId);
             if (exist) {
                 exist.quantity++;
             } else {
-                cart.push({ id: p.id, name: p.name, price: p.price, quantity: 1, category: p.category });
+                cart.push({ id: cartId, originalId: p.id, name: finalName, price: p.price, quantity: 1, category: p.category, toppings: selectedToppings });
             }
 
             updateCartBadge();
@@ -657,6 +740,70 @@
                 deliveryRow.classList.add('hidden');
                 packagingRow.classList.add('hidden');
             }
+        }
+
+        // --- SISTEMA INTELIGENTE DE TOPPINGS ---
+        const AVAILABLE_TOPPINGS = [
+            "Gomitas", "Fruta (Fresa)", "Fruta (Mango)", "Fruta (Maracuyá)", "Fruta (Kiwi)",
+            "Fruta (Lulo)", "Fruta (Manzana)", "Fruta (Banano)", "Fruta (Arándanos)", "Fruta (Uva)",
+            "Queso", "Brownie", "Chocorramo", "Chips de chocolate blanco", "Chips de chocolate negro",
+            "M&m", "Barquillos", "Explosión de sabor"
+        ];
+        
+        let currentToppingProductId = null;
+        let currentMaxToppings = 0;
+
+        function openToppingsModal(productId, maxToppings) {
+            currentToppingProductId = productId;
+            currentMaxToppings = maxToppings;
+
+            document.getElementById('toppings-max-count').innerText = maxToppings;
+            const container = document.getElementById('toppings-list');
+            container.innerHTML = '';
+
+            AVAILABLE_TOPPINGS.forEach((t) => {
+                container.innerHTML += `
+                    <label class="flex items-center gap-3 p-3 border border-fresh-pink/20 rounded-xl cursor-pointer hover:bg-fresh-lightPurple transition bg-neutral-50 shadow-sm active:scale-95">
+                        <input type="checkbox" value="${t}" class="topping-checkbox w-4 h-4 text-fresh-purple focus:ring-fresh-purple border-gray-300 rounded" onchange="checkToppingsLimit(this)">
+                        <span class="text-xs font-bold text-fresh-dark">${t}</span>
+                    </label>
+                `;
+            });
+
+            const modal = document.getElementById('toppings-modal');
+            const box = document.getElementById('toppings-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function checkToppingsLimit(checkbox) {
+            const checkboxes = document.querySelectorAll('.topping-checkbox:checked');
+            if (checkboxes.length > currentMaxToppings) {
+                checkbox.checked = false;
+                showToast(`Solo puedes elegir un máximo de ${currentMaxToppings} toppings para este producto.`, "info");
+            }
+        }
+
+        function closeToppingsModal() {
+            const modal = document.getElementById('toppings-modal');
+            const box = document.getElementById('toppings-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+            currentToppingProductId = null;
+        }
+
+        function confirmToppingsSelection() {
+            const checkboxes = document.querySelectorAll('.topping-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast(`Por favor, selecciona al menos un topping para continuar.`, "error");
+                return;
+            }
+            const selectedToppings = Array.from(checkboxes).map(cb => cb.value);
+            const productId = currentToppingProductId;
+            closeToppingsModal();
+            addToCart(productId, selectedToppings); // Llama nuevamente la función puenteando la selección
         }
 
         // --- SISTEMA DESPACHO DEL CLIENTE ---
