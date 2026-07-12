@@ -376,8 +376,8 @@
         // =========================================================================
         // 💳 CONFIGURACIÓN DE CUENTAS DE PAGO (¡Modifícalas aquí o desde el LocalStorage!)
         // =========================================================================
-        let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3228586808";
-        let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "71300000087977";
+        let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3213169929";
+        let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "76336493613";
 
         // --- DEFINICIÓN DE LAS CATEGORÍAS DIRECTAMENTE DESDE EL JAVASCRIPT ---
         const APP_CATEGORIES = [
@@ -1025,10 +1025,23 @@
             msg += `------------------------------------\n`;
             
             msg += `Forma de Pago: ${order.payment}\n`;
-            msg += `👉 al número siguiente 3213169929 para cancelar el valor del pedido.\n`;
+            
+            if (order.payment === 'Nequi') {
+                msg += `👉 Cuenta NEQUI: ${companyNequi}\n`;
+            } else if (order.payment === 'Transferencia') {
+                msg += `👉 Cuenta de ahorros Bancolombia: ${companyBancolombia}\n`;
+            } else if (order.payment === 'Efectivo') {
+                msg += `👉 Paga con: ${cashBill}\n`;
+            }
             
             msg += `------------------------------------\n`;
-            msg += `Envia este mensaje para confirmar tu pedido, con el comprobante de la transferencia.`;
+            
+            if (order.payment === 'Efectivo') {
+                msg += `Envía este mensaje para confirmar tu pedido.`;
+            } else {
+                msg += `Envía este mensaje para confirmar tu pedido, con el comprobante de la transferencia.`;
+            }
+            
             return msg;
         }
 
