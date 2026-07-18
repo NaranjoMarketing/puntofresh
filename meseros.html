@@ -425,8 +425,8 @@
                 activeTable.items.forEach(i => {
                     waiterCart.push({
                         id: i.id,
-                        uid: i.uid,
-                        timestamp: i.timestamp,
+                        uid: i.uid || "item_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                        timestamp: i.timestamp || Date.now(),
                         name: i.name,
                         price: i.price,
                         quantity: i.quantity,
@@ -653,18 +653,30 @@
         function saveAndSendComanda() {
             if (!activeTable) return;
 
-            activeTable.items = [...waiterCart];
+            // LECTURA FRESCA DE LA BASE DE DATOS LOCAL PARA EVITAR DESFACES DE MEMORIA
+            let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
+            let dbTableIndex = currentDbMesas.findIndex(m => m.id === activeTable.id);
             
-            if (waiterCart.length > 0) {
-                activeTable.status = (activeTable.status === 'Cuenta') ? 'Cuenta' : 'Ocupada';
-                activeTable.waiter = currentWaiter;
-            } else {
-                activeTable.status = "Libre";
-                activeTable.waiter = "";
-            }
+            if (dbTableIndex !== -1) {
+                currentDbMesas[dbTableIndex].items = [...waiterCart];
+                
+                if (waiterCart.length > 0) {
+                    currentDbMesas[dbTableIndex].status = (currentDbMesas[dbTableIndex].status === 'Cuenta') ? 'Cuenta' : 'Ocupada';
+                    currentDbMesas[dbTableIndex].waiter = currentWaiter;
+                } else {
+                    currentDbMesas[dbTableIndex].status = "Libre";
+                    currentDbMesas[dbTableIndex].waiter = "";
+                }
 
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
+                mesas = currentDbMesas; // Actualizamos la memoria principal
+                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                
+                // Disparo de evento enriquecido para sincronización con Cocina/Caja
+                window.dispatchEvent(new StorageEvent('storage', { 
+                    key: DB_PREFIX + 'mesas_v2', 
+                    newValue: JSON.stringify(mesas) 
+                }));
+            }
 
             showToast("¡Pedido guardado y enviado a la cocina!", "success");
             closeTableDrawer();
@@ -678,9 +690,20 @@
                 return;
             }
 
-            activeTable.status = "Cuenta";
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
+            // LECTURA FRESCA
+            let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
+            let dbTableIndex = currentDbMesas.findIndex(m => m.id === activeTable.id);
+            
+            if (dbTableIndex !== -1) {
+                currentDbMesas[dbTableIndex].status = "Cuenta";
+                mesas = currentDbMesas;
+                
+                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                window.dispatchEvent(new StorageEvent('storage', { 
+                    key: DB_PREFIX + 'mesas_v2', 
+                    newValue: JSON.stringify(mesas) 
+                }));
+            }
 
             showToast("¡Caja notificada de solicitud de cuenta!", "success");
             closeTableDrawer();
@@ -692,12 +715,22 @@
             
             const confirmed = confirm("¿Deseas cancelar y liberar por completo esta mesa?");
             if (confirmed) {
-                activeTable.items = [];
-                activeTable.status = "Libre";
-                activeTable.waiter = "";
-
-                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
+                // LECTURA FRESCA
+                let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
+                let dbTableIndex = currentDbMesas.findIndex(m => m.id === activeTable.id);
+                
+                if (dbTableIndex !== -1) {
+                    currentDbMesas[dbTableIndex].items = [];
+                    currentDbMesas[dbTableIndex].status = "Libre";
+                    currentDbMesas[dbTableIndex].waiter = "";
+                    mesas = currentDbMesas;
+                    
+                    localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                    window.dispatchEvent(new StorageEvent('storage', { 
+                        key: DB_PREFIX + 'mesas_v2', 
+                        newValue: JSON.stringify(mesas) 
+                    }));
+                }
 
                 showToast("Mesa liberada por completo.", "info");
                 closeTableDrawer();
@@ -720,7 +753,11 @@
                 waiter: ""
             };
             
-            mesas.push(newMesa);
+            // LECTURA FRESCA AL CREAR
+            let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
+            currentDbMesas.push(newMesa);
+            mesas = currentDbMesas;
+            
             localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
             window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
             renderTablesGrid();
@@ -736,7 +773,10 @@
             
             const confirmed = confirm(`¿Estás seguro de ELIMINAR la ${activeTable.name} del sistema permanentemente?`);
             if (confirmed) {
-                mesas = mesas.filter(m => m.id !== activeTable.id);
+                // LECTURA FRESCA AL ELIMINAR
+                let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
+                mesas = currentDbMesas.filter(m => m.id !== activeTable.id);
+                
                 localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
                 window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
                 closeTableDrawer();
