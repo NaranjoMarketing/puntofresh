@@ -7,9 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- LIBRERÍAS DE FIREBASE (NUBE) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -87,7 +91,7 @@
             <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Logo" class="h-10 w-auto object-contain">
             <div>
                 <h1 class="text-xs font-serif italic text-fresh-pink leading-none">Punto Fresh</h1>
-                <p class="text-[9px] text-fresh-lightPurple">Comandas - Servicios Inírida</p>
+                <p class="text-[9px] text-fresh-lightPurple flex items-center gap-1"><i class="fa-solid fa-cloud text-emerald-400"></i> Conectado a la Nube</p>
             </div>
         </div>
         
@@ -130,11 +134,10 @@
 
     </main>
 
-    <!-- DRAWER DE COMANDA ACTIVA (OCULTO POR DEFECTO) -->
+    <!-- DRAWER DE COMANDA ACTIVA -->
     <div id="table-drawer" class="fixed inset-0 bg-fresh-purple/70 backdrop-blur-xs z-50 opacity-0 pointer-events-none transition-all duration-300">
         <div id="table-drawer-panel" class="fixed right-0 top-0 bottom-0 max-w-lg w-full bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col" onclick="event.stopPropagation()">
             
-            <!-- Cabecera del Panel -->
             <div class="p-4 border-b border-fresh-pink/10 bg-fresh-lightPurple/50 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2">
                     <span id="drawer-table-icon" class="w-8 h-8 rounded-full bg-fresh-purple text-white flex items-center justify-center text-sm font-bold">1</span>
@@ -146,10 +149,7 @@
                 <button onclick="closeTableDrawer()" class="text-neutral-400 hover:text-fresh-purple p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
 
-            <!-- Contenido Principal Desplazable del Drawer (Dividido en Comanda y Menú) -->
             <div class="flex-grow overflow-y-auto flex flex-col p-4 space-y-4">
-                
-                <!-- COMANDA ACTUAL DE LA MESA -->
                 <div class="bg-neutral-50 p-3 rounded-2xl border border-neutral-100 flex flex-col shrink-0 min-h-[140px]">
                     <div class="flex justify-between items-center mb-2 border-b border-neutral-200 pb-1.5">
                         <span class="text-[10px] font-black text-neutral-500 uppercase tracking-wider">Productos en Comanda</span>
@@ -164,26 +164,19 @@
                     </div>
                 </div>
 
-                <!-- AÑADIR NUEVO PRODUCTO RÁPIDO -->
                 <div class="flex-grow flex flex-col">
                     <h4 class="text-[10px] font-black text-neutral-400 uppercase tracking-wider mb-2">Añadir Helados y Bebidas</h4>
                     
-                    <!-- Filtro buscador de helados -->
                     <div class="relative mb-2">
                         <input type="text" id="menu-search-input" oninput="renderWaiterMenu()" placeholder="Buscar en la carta..." class="w-full bg-neutral-50 border border-neutral-200 py-2 px-3 pl-8 rounded-lg text-xs font-semibold outline-none focus:ring-1 focus:ring-fresh-purple transition-all">
                         <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs"></i>
                     </div>
 
-                    <!-- Botones de Categorías Desplazables -->
                     <div id="waiter-categories-slider" class="flex gap-1.5 overflow-x-auto no-scrollbar pb-2 shrink-0"></div>
-
-                    <!-- Lista de Productos Disponibles -->
                     <div id="waiter-menu-grid" class="flex-grow overflow-y-auto grid grid-cols-2 gap-2 pr-1 max-h-[220px]"></div>
                 </div>
-
             </div>
 
-            <!-- Botones de Acción de Comanda -->
             <div class="p-4 border-t border-fresh-pink/10 bg-white grid grid-cols-2 gap-2 shrink-0">
                 <button onclick="requestTableBill()" id="btn-pedir-cuenta" class="py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md transition transform active:scale-95 flex items-center justify-center gap-1.5">
                     <i class="fa-solid fa-file-invoice-dollar"></i> Solicitar Cuenta
@@ -198,11 +191,10 @@
                     <i class="fa-solid fa-folder-minus"></i> Eliminar Mesa del Sistema
                 </button>
             </div>
-
         </div>
     </div>
 
-    <!-- MODAL DE NOTAS ESPECIALES POR PRODUCTO -->
+    <!-- MODAL DE NOTAS -->
     <div id="note-modal" class="fixed inset-0 z-[100] bg-fresh-purple/80 backdrop-blur-xs flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="bg-white max-w-xs w-full rounded-2xl p-5 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="note-box">
             <h4 class="font-serif text-sm font-black text-fresh-purple mb-1">Notas Especiales</h4>
@@ -217,25 +209,50 @@
         </div>
     </div>
 
-    <!-- PIE DE PÁGINA INFORMATIVO -->
     <footer class="bg-fresh-purple text-white py-3 text-center text-[9px] border-t border-fresh-pink/20 shrink-0">
-        © 2026 PUNTO FRESH - Módulo Comanda Móvil para Meseros (Inírida).
+        © 2026 PUNTO FRESH - Módulo Comanda Móvil Cloud (Inírida).
     </footer>
 
-    <!-- SCRIPT DE COMPORTAMIENTO -->
+    <!-- SCRIPT CENTRAL CON CONEXIÓN A FIREBASE -->
     <script>
         const DB_PREFIX = "PUNTOFRESH_V1_";
 
+        // ==========================================
+        // ☁️ CONFIGURACIÓN QUIRÚRGICA DE FIREBASE ☁️
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBF553ngCo26v31YghnXzRBwETzxeXAhVk",
+            authDomain: "punto-fresh-inirida.firebaseapp.com",
+            projectId: "punto-fresh-inirida",
+            storageBucket: "punto-fresh-inirida.firebasestorage.app",
+            messagingSenderId: "71265530247",
+            appId: "1:71265530247:web:91465ff11146e745e42322"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const restauranteRef = db.collection('sistema').doc('estado_mesas');
+        
+        // Función para enviar las mesas a internet en lugar de guardarlas localmente
+        async function syncToCloud() {
+            try {
+                await restauranteRef.set({ mesas: mesas }, { merge: true });
+            } catch (error) {
+                console.error("Error conectando a la nube: ", error);
+                showToast("Revisar conexión a internet.", "error");
+            }
+        }
+        // ==========================================
+
         let currentWaiter = localStorage.getItem(DB_PREFIX + 'currentWaiter') || "";
         let products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
-        let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
-
+        let mesas = []; // Ahora se carga desde la nube
+        
         let activeTable = null;
-        let waiterCart = []; // Almacenamiento temporal de los productos seleccionados para la mesa activa
+        let waiterCart = []; 
         let activeCategory = "Todos";
-        let noteItemIndex = null; // Índice del ítem del carrito al que se le añadirá nota
+        let noteItemIndex = null; 
 
-        // --- INICIALIZACIÓN DE LAS MESAS POR DEFECTO SI NO EXISTEN ---
         const DEFAULT_MESAS = [
             { id: "M1", name: "Mesa 1", label: "Mesa 1", status: "Libre", items: [], waiter: "" },
             { id: "M2", name: "Mesa 2", label: "Mesa 2", status: "Libre", items: [], waiter: "" },
@@ -249,7 +266,6 @@
             { id: "M10", name: "Mesa Auxiliar 2", label: "Mesa Auxiliar 2", status: "Libre", items: [], waiter: "" }
         ];
 
-        // --- SISTEMA DE NOTIFICACIONES TOAST ---
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
             if(!container) return;
@@ -257,18 +273,13 @@
             let bg = 'bg-fresh-purple border-fresh-pink/20';
             if (type === 'success') bg = 'bg-emerald-600 border-white/20';
             if (type === 'error') bg = 'bg-rose-600 border-white/20';
-            
             toast.className = `mx-auto px-5 py-2.5 rounded-full text-white text-xs font-bold shadow-xl transform transition-all duration-300 -translate-y-10 opacity-0 flex items-center justify-center gap-1.5 ${bg} border pointer-events-auto`;
             toast.innerHTML = `<i class="fa-solid fa-mobile-screen-button text-fresh-pink"></i> <span>${msg}</span>`;
             container.appendChild(toast);
             setTimeout(() => { toast.classList.remove('-translate-y-10', 'opacity-0'); }, 10);
-            setTimeout(() => { 
-                toast.classList.add('-translate-y-10', 'opacity-0'); 
-                setTimeout(() => toast.remove(), 300); 
-            }, 2500);
+            setTimeout(() => { toast.classList.add('-translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 2500);
         }
 
-        // --- CONTROL DE SESIÓN CON PIN Y INGRESO DIRECTO ---
         function checkWaiterSession() {
             const screen = document.getElementById('waiter-login-screen');
             if (currentWaiter) {
@@ -285,83 +296,91 @@
             const pinInput = document.getElementById('waiter-pin-input');
             const name = nameInput.value.trim();
             const pin = pinInput.value.trim();
-            
-            // Obtener PIN de mesero desde ajustes del POS, por defecto es 1234
             const configPin = localStorage.getItem(DB_PREFIX + 'waiterPass') || "1234";
 
-            if (!name) {
-                showToast("Por favor ingresa tu nombre de mesero.", "error");
-                return;
-            }
-            if (!pin) {
-                showToast("Por favor ingresa el PIN de seguridad.", "error");
-                return;
-            }
-            if (pin !== configPin) {
-                showToast("Contraseña/PIN de mesero incorrecta.", "error");
-                return;
-            }
+            if (!name) { showToast("Por favor ingresa tu nombre.", "error"); return; }
+            if (!pin || pin !== configPin) { showToast("Contraseña incorrecta.", "error"); return; }
 
             currentWaiter = name;
             localStorage.setItem(DB_PREFIX + 'currentWaiter', name);
-            showToast(`¡Hola, ${name}! Comanda abierta de forma correcta para Inírida.`, 'success');
+            showToast(`¡Hola, ${name}! Sesión conectada.`, 'success');
             checkWaiterSession();
-            
-            nameInput.value = '';
-            pinInput.value = '';
         }
 
         function closeWaiterSession() {
-            const confirmed = confirm("¿Deseas cerrar la comanda actual? Esto cerrará tu sesión y restablecerá la terminal a 0.");
-            if (confirmed) {
+            if (confirm("¿Deseas cerrar la comanda actual?")) {
                 currentWaiter = "";
                 localStorage.removeItem(DB_PREFIX + 'currentWaiter');
                 checkWaiterSession();
-                showToast("Comanda de mesero cerrada. Sesión en ceros.", "info");
             }
         }
 
-        // --- CARGAR DATOS GENERALES ---
         function initWaiterApp() {
-            mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
-            if (mesas.length === 0) {
-                mesas = DEFAULT_MESAS;
-                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            }
-
             products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
-
-            renderTablesGrid();
             buildWaiterCategoriesMenu();
+            
+            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL
+            restauranteRef.onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    const newMesas = data.mesas || [];
+                    
+                    // Detectar si la cocina marcó algo como listo
+                    newMesas.forEach(newMesa => {
+                        let oldMesa = mesas.find(m => m.id === newMesa.id);
+                        if (oldMesa) {
+                            let oldPending = oldMesa.items ? oldMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
+                            let newPending = newMesa.items ? newMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
+                            let hasListo = newMesa.items ? newMesa.items.some(i => i.status === 'Listo') : false;
+                            
+                            if (oldPending && !newPending && hasListo) {
+                                showToast(`¡El pedido de ${newMesa.name} está LISTO!`, 'success');
+                                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                            }
+                        }
+                    });
+
+                    mesas = newMesas;
+                    renderTablesGrid();
+                    
+                    // Actualizar panel si la mesa está abierta
+                    if (activeTable) {
+                        const matched = mesas.find(m => m.id === activeTable.id);
+                        if (matched) {
+                            activeTable = matched;
+                            waiterCart = [];
+                            if (activeTable.items) {
+                                activeTable.items.forEach(i => { waiterCart.push({...i}); });
+                            }
+                            updateComandaUI();
+                        }
+                    }
+                } else {
+                    // Si la nube está vacía, iniciamos con las mesas por defecto
+                    mesas = DEFAULT_MESAS;
+                    syncToCloud();
+                }
+            }, (error) => {
+                showToast("Desconectado de la Nube", "error");
+            });
         }
 
-        // --- RENDERIZADO DEL PANEL DE MESAS ---
         function renderTablesGrid() {
             const container = document.getElementById('tables-grid-container');
             container.innerHTML = '';
+            let freeCount = 0; let busyCount = 0; let billCount = 0;
 
-            let freeCount = 0;
-            let busyCount = 0;
-            let billCount = 0;
-
-            // FILTRO QUIRÚRGICO: Excluir domicilios, pedidos para llevar y mostrador del panel de meseros
-            const mesasFisicas = mesas.filter(m => 
-                !m.name.toLowerCase().includes('domicilio') && 
-                !m.name.toLowerCase().includes('llevar') &&
-                !m.name.toLowerCase().includes('mostrador')
-            );
+            const mesasFisicas = mesas.filter(m => !m.name.toLowerCase().includes('domicilio') && !m.name.toLowerCase().includes('llevar') && !m.name.toLowerCase().includes('mostrador'));
 
             mesasFisicas.forEach(m => {
                 let statusColor = "bg-emerald-50 border-emerald-200 text-emerald-800";
                 let statusBadge = `<span class="bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Libre</span>`;
                 
-                // Verificadores de estado de cocina
                 let hasPendingOrPrep = m.items && m.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando');
                 let hasListo = m.items && m.items.some(i => i.status === 'Listo');
 
                 if (m.status === 'Ocupada') {
                     if (!hasPendingOrPrep && hasListo) {
-                        // ¡PEDIDO LISTO! Animación y color llamativo
                         statusColor = "bg-amber-100 border-amber-400 text-amber-900 animate-pulse shadow-md";
                         statusBadge = `<span class="bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase"><i class="fa-solid fa-bell"></i> ¡Pedido Listo!</span>`;
                     } else {
@@ -378,7 +397,6 @@
                 }
 
                 let itemsCount = m.items ? m.items.reduce((s,i) => s + i.quantity, 0) : 0;
-
                 container.innerHTML += `
                     <button onclick="openTable('${m.id}')" class="p-4 rounded-2xl border ${statusColor} text-left flex flex-col justify-between h-28 shadow-sm transition active:scale-95 duration-200">
                         <div class="w-full text-left">
@@ -392,48 +410,30 @@
                     </button>
                 `;
             });
-
             document.getElementById('stat-free-tables').innerText = freeCount;
             document.getElementById('stat-busy-tables').innerText = busyCount;
             document.getElementById('stat-bill-tables').innerText = billCount;
         }
 
-        // --- CONTROL DE MESA EN EDICIÓN ---
         function openTable(id) {
             activeTable = mesas.find(m => m.id === id);
             if (!activeTable) return;
 
-            // VERIFICACIÓN QUIRÚRGICA: Si el pedido está Listo, preguntar si ya se entregó
             let hasPendingOrPrep = activeTable.items && activeTable.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando');
             let hasListo = activeTable.items && activeTable.items.some(i => i.status === 'Listo');
             
             if (!hasPendingOrPrep && hasListo) {
                 if (confirm(`El pedido de ${activeTable.name} está LISTO. ¿Confirmas que ya fue entregado a la mesa?`)) {
-                    activeTable.items.forEach(i => {
-                        if(i.status === 'Listo') i.status = 'Entregado';
-                    });
-                    localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                    window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
+                    activeTable.items.forEach(i => { if(i.status === 'Listo') i.status = 'Entregado'; });
+                    syncToCloud(); // <-- Actualiza la nube
                     showToast("Pedido entregado en mesa exitosamente.", "success");
-                    renderTablesGrid();
-                    return; // Retornamos para no abrir el cajón de toma de pedidos
+                    return; 
                 }
             }
 
             waiterCart = [];
             if(activeTable.items) {
-                activeTable.items.forEach(i => {
-                    waiterCart.push({
-                        id: i.id,
-                        uid: i.uid || "item_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-                        timestamp: i.timestamp || Date.now(),
-                        name: i.name,
-                        price: i.price,
-                        quantity: i.quantity,
-                        status: i.status || 'Pendiente',
-                        note: i.note || ''
-                    });
-                });
+                activeTable.items.forEach(i => { waiterCart.push({...i}); });
             }
 
             document.getElementById('drawer-table-icon').innerText = activeTable.name.match(/\d+/) ? activeTable.name.match(/\d+/)[0] : "PF";
@@ -463,36 +463,25 @@
 
             updateComandaUI();
             renderWaiterMenu();
-
-            const overlay = document.getElementById('table-drawer');
-            const panel = document.getElementById('table-drawer-panel');
-            overlay.classList.remove('pointer-events-none', 'opacity-0');
-            panel.classList.remove('translate-x-full');
+            document.getElementById('table-drawer').classList.remove('pointer-events-none', 'opacity-0');
+            document.getElementById('table-drawer-panel').classList.remove('translate-x-full');
         }
 
         function closeTableDrawer() {
-            const overlay = document.getElementById('table-drawer');
-            const panel = document.getElementById('table-drawer-panel');
-            overlay.classList.add('pointer-events-none', 'opacity-0');
-            panel.classList.add('translate-x-full');
+            document.getElementById('table-drawer').classList.add('pointer-events-none', 'opacity-0');
+            document.getElementById('table-drawer-panel').classList.add('translate-x-full');
             activeTable = null;
         }
 
-        // --- CONTROL Y RENDER DE COMANDAS ---
         function updateComandaUI() {
             const list = document.getElementById('comanda-items-list');
-            list.innerHTML = '';
-            let total = 0;
-
+            list.innerHTML = ''; let total = 0;
             if (waiterCart.length === 0) {
                 list.innerHTML = `<p class="text-center text-xs text-neutral-400 py-6">Mesa sin pedidos. ¡Añade helados de la carta!</p>`;
-                document.getElementById('drawer-table-total').innerText = "$0";
-                return;
+                document.getElementById('drawer-table-total').innerText = "$0"; return;
             }
-
             waiterCart.forEach((item, idx) => {
                 total += item.price * item.quantity;
-                
                 let statusBadgeColor = "bg-neutral-100 text-neutral-600 border border-neutral-300";
                 if(item.status === 'Listo') statusBadgeColor = "bg-emerald-50 text-emerald-600 border border-emerald-300";
                 if(item.status === 'Preparando') statusBadgeColor = "bg-purple-50 text-fresh-purple border border-fresh-pink/40";
@@ -507,7 +496,6 @@
                                 <span class="font-black text-fresh-purple text-[11px]">$${(item.price * item.quantity).toLocaleString()}</span>
                             </div>
                         </div>
-                        
                         <div class="flex items-center justify-between mt-1 text-[10px] bg-fresh-lightPurple/25 px-2 py-1 rounded border border-fresh-pink/10">
                             <span class="text-neutral-400 italic font-medium truncate max-w-[70%]">${item.note ? `Nota: "${item.note}"` : 'Sin notas'}</span>
                             <div class="flex gap-1.5 shrink-0 ml-2">
@@ -516,328 +504,137 @@
                                 <button onclick="updateCartItemQty(${idx}, -1)" class="text-rose-500 hover:underline font-bold">Quitar</button>
                             </div>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
-
             document.getElementById('drawer-table-total').innerText = `$${total.toLocaleString()}`;
         }
 
         function updateCartItemQty(idx, delta) {
-            if (waiterCart[idx].status !== 'Pendiente') {
-                showToast("Este producto ya se mandó a cocina y no se puede quitar.", "error");
-                return;
-            }
+            if (waiterCart[idx].status !== 'Pendiente') { showToast("Este producto ya se mandó a cocina.", "error"); return; }
             waiterCart[idx].quantity += delta;
-            if (waiterCart[idx].quantity <= 0) {
-                waiterCart.splice(idx, 1);
-            }
+            if (waiterCart[idx].quantity <= 0) waiterCart.splice(idx, 1);
             updateComandaUI();
         }
 
-        // --- CONTROL DEL MENÚ DE HELADOS EN COMANDA ---
         function buildWaiterCategoriesMenu() {
             const container = document.getElementById('waiter-categories-slider');
             container.innerHTML = '';
-
             const categories = ["Todos"];
-            products.forEach(p => {
-                if(p.category && !categories.includes(p.category)) {
-                    categories.push(p.category);
-                }
-            });
-
+            products.forEach(p => { if(p.category && !categories.includes(p.category)) categories.push(p.category); });
             categories.forEach(cat => {
                 const isActive = cat === activeCategory;
-                container.innerHTML += `
-                    <button onclick="setWaiterActiveCategory('${cat}')" class="shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${isActive ? 'bg-fresh-purple text-white border-fresh-purple' : 'bg-neutral-50 text-fresh-purple border-neutral-200' }">
-                        ${cat}
-                    </button>
-                `;
+                container.innerHTML += `<button onclick="setWaiterActiveCategory('${cat}')" class="shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${isActive ? 'bg-fresh-purple text-white border-fresh-purple' : 'bg-neutral-50 text-fresh-purple border-neutral-200' }">${cat}</button>`;
             });
         }
 
         function setWaiterActiveCategory(cat) {
-            activeCategory = cat;
-            buildWaiterCategoriesMenu();
-            renderWaiterMenu();
+            activeCategory = cat; buildWaiterCategoriesMenu(); renderWaiterMenu();
         }
 
         function renderWaiterMenu() {
             const grid = document.getElementById('waiter-menu-grid');
             grid.innerHTML = '';
             const search = document.getElementById('menu-search-input').value.toLowerCase();
-
             let filtered = products;
-
-            if (activeCategory !== 'Todos') {
-                filtered = filtered.filter(p => p.category === activeCategory);
-            }
-
-            if (search) {
-                filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
-            }
-
-            if (filtered.length === 0) {
-                grid.innerHTML = `<p class="col-span-full text-center text-[10px] text-neutral-400 py-4">No se encontraron productos.</p>`;
-                return;
-            }
-
+            if (activeCategory !== 'Todos') filtered = filtered.filter(p => p.category === activeCategory);
+            if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
+            if (filtered.length === 0) { grid.innerHTML = `<p class="col-span-full text-center text-[10px] text-neutral-400 py-4">No se encontraron productos.</p>`; return; }
             filtered.forEach(p => {
                 grid.innerHTML += `
                     <button onclick="addProductToComanda('${p.id}')" class="bg-neutral-50 border border-neutral-200 p-2 rounded-xl text-left hover:bg-fresh-lightPurple transition flex flex-col justify-between h-14 active:scale-95">
                         <span class="font-bold text-[10px] text-fresh-purple truncate w-full uppercase block">${p.name}</span>
                         <span class="font-extrabold text-[10px] text-fresh-purple mt-1 block">$${p.price.toLocaleString()}</span>
-                    </button>
-                `;
+                    </button>`;
             });
         }
 
         function addProductToComanda(id) {
             const p = products.find(x => x.id === id);
             if (!p) return;
-
             let exist = waiterCart.find(i => i.id === id && i.status === 'Pendiente');
-            if (exist) {
-                exist.quantity++;
-            } else {
-                waiterCart.push({
-                    id: p.id,
-                    uid: "item_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-                    timestamp: Date.now(),
-                    name: p.name,
-                    price: p.price,
-                    quantity: 1,
-                    status: 'Pendiente',
-                    note: ''
-                });
-            }
-
-            updateComandaUI();
-            showToast(`${p.name} agregado.`, 'success');
+            if (exist) exist.quantity++;
+            else waiterCart.push({ id: p.id, uid: Date.now() + Math.random(), name: p.name, price: p.price, quantity: 1, status: 'Pendiente', note: '' });
+            updateComandaUI(); showToast(`${p.name} agregado.`, 'success');
         }
 
-        // --- CONTROL MODAL NOTAS ---
         function openNoteModal(idx) {
             noteItemIndex = idx;
-            const item = waiterCart[idx];
-            document.getElementById('note-product-name').innerText = item.name;
-            document.getElementById('note-text-area').value = item.note || '';
-
-            const modal = document.getElementById('note-modal');
-            const box = document.getElementById('note-box');
-            modal.classList.remove('opacity-0', 'pointer-events-none');
-            box.classList.remove('scale-95');
-            box.classList.add('scale-100');
+            document.getElementById('note-product-name').innerText = waiterCart[idx].name;
+            document.getElementById('note-text-area').value = waiterCart[idx].note || '';
+            document.getElementById('note-modal').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('note-box').classList.remove('scale-95'); document.getElementById('note-box').classList.add('scale-100');
         }
 
         function closeNoteModal() {
-            const modal = document.getElementById('note-modal');
-            const box = document.getElementById('note-box');
-            modal.classList.add('opacity-0', 'pointer-events-none');
-            box.classList.remove('scale-100');
-            box.classList.add('scale-95');
+            document.getElementById('note-modal').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('note-box').classList.remove('scale-100'); document.getElementById('note-box').classList.add('scale-95');
             noteItemIndex = null;
         }
 
         function applyProductNote() {
             if (noteItemIndex === null) return;
-            const note = document.getElementById('note-text-area').value.trim();
-            waiterCart[noteItemIndex].note = note;
-            updateComandaUI();
-            closeNoteModal();
-            showToast("Nota asignada al producto.", "success");
+            waiterCart[noteItemIndex].note = document.getElementById('note-text-area').value.trim();
+            updateComandaUI(); closeNoteModal(); showToast("Nota asignada al producto.", "success");
         }
 
-        // --- ACCONES DE ENVÍO Y CONFIGURACIÓN ---
         function saveAndSendComanda() {
             if (!activeTable) return;
-
-            // LECTURA FRESCA DE LA BASE DE DATOS LOCAL PARA EVITAR DESFACES DE MEMORIA
-            let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
-            let dbTableIndex = currentDbMesas.findIndex(m => m.id === activeTable.id);
-            
-            if (dbTableIndex !== -1) {
-                currentDbMesas[dbTableIndex].items = [...waiterCart];
-                
+            let index = mesas.findIndex(m => m.id === activeTable.id);
+            if (index !== -1) {
+                mesas[index].items = [...waiterCart];
                 if (waiterCart.length > 0) {
-                    currentDbMesas[dbTableIndex].status = (currentDbMesas[dbTableIndex].status === 'Cuenta') ? 'Cuenta' : 'Ocupada';
-                    currentDbMesas[dbTableIndex].waiter = currentWaiter;
+                    mesas[index].status = (mesas[index].status === 'Cuenta') ? 'Cuenta' : 'Ocupada';
+                    mesas[index].waiter = currentWaiter;
                 } else {
-                    currentDbMesas[dbTableIndex].status = "Libre";
-                    currentDbMesas[dbTableIndex].waiter = "";
+                    mesas[index].status = "Libre"; mesas[index].waiter = "";
                 }
-
-                mesas = currentDbMesas; // Actualizamos la memoria principal
-                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                
-                // Disparo de evento enriquecido para sincronización con Cocina/Caja
-                window.dispatchEvent(new StorageEvent('storage', { 
-                    key: DB_PREFIX + 'mesas_v2', 
-                    newValue: JSON.stringify(mesas) 
-                }));
+                syncToCloud(); // <-- Dispara la actualización a internet
             }
-
-            showToast("¡Pedido guardado y enviado a la cocina!", "success");
+            showToast("¡Pedido guardado y enviado a la cocina por Internet!", "success");
             closeTableDrawer();
-            renderTablesGrid();
         }
 
         function requestTableBill() {
             if (!activeTable) return;
-            if (activeTable.items.length === 0) {
-                showToast("No se puede cobrar una mesa vacía.", "error");
-                return;
+            if (activeTable.items.length === 0) { showToast("No se puede cobrar mesa vacía.", "error"); return; }
+            let index = mesas.findIndex(m => m.id === activeTable.id);
+            if (index !== -1) {
+                mesas[index].status = "Cuenta";
+                syncToCloud(); // <-- Dispara la actualización a internet
             }
-
-            // LECTURA FRESCA
-            let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
-            let dbTableIndex = currentDbMesas.findIndex(m => m.id === activeTable.id);
-            
-            if (dbTableIndex !== -1) {
-                currentDbMesas[dbTableIndex].status = "Cuenta";
-                mesas = currentDbMesas;
-                
-                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                window.dispatchEvent(new StorageEvent('storage', { 
-                    key: DB_PREFIX + 'mesas_v2', 
-                    newValue: JSON.stringify(mesas) 
-                }));
-            }
-
             showToast("¡Caja notificada de solicitud de cuenta!", "success");
             closeTableDrawer();
-            renderTablesGrid();
         }
 
         function clearCurrentMesa() {
             if (!activeTable) return;
-            
-            const confirmed = confirm("¿Deseas cancelar y liberar por completo esta mesa?");
-            if (confirmed) {
-                // LECTURA FRESCA
-                let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
-                let dbTableIndex = currentDbMesas.findIndex(m => m.id === activeTable.id);
-                
-                if (dbTableIndex !== -1) {
-                    currentDbMesas[dbTableIndex].items = [];
-                    currentDbMesas[dbTableIndex].status = "Libre";
-                    currentDbMesas[dbTableIndex].waiter = "";
-                    mesas = currentDbMesas;
-                    
-                    localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                    window.dispatchEvent(new StorageEvent('storage', { 
-                        key: DB_PREFIX + 'mesas_v2', 
-                        newValue: JSON.stringify(mesas) 
-                    }));
+            if (confirm("¿Deseas cancelar y liberar por completo esta mesa?")) {
+                let index = mesas.findIndex(m => m.id === activeTable.id);
+                if (index !== -1) {
+                    mesas[index].items = []; mesas[index].status = "Libre"; mesas[index].waiter = "";
+                    syncToCloud(); // <-- Dispara la actualización a internet
                 }
-
-                showToast("Mesa liberada por completo.", "info");
-                closeTableDrawer();
-                renderTablesGrid();
+                showToast("Mesa liberada.", "info"); closeTableDrawer();
             }
         }
 
-        // --- GESTIÓN DE MESAS (AÑADIR / ELIMINAR) ---
         function addNewTable() {
-            const tableName = prompt("Ingresa el nombre de la nueva mesa (Ej: Mesa 11, VIP 1):");
+            const tableName = prompt("Ingresa el nombre de la nueva mesa (Ej: Mesa 11):");
             if (!tableName || tableName.trim() === "") return;
-            
-            const newId = "M" + Date.now();
-            const newMesa = {
-                id: newId,
-                name: tableName.trim(),
-                label: tableName.trim(),
-                status: "Libre",
-                items: [],
-                waiter: ""
-            };
-            
-            // LECTURA FRESCA AL CREAR
-            let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
-            currentDbMesas.push(newMesa);
-            mesas = currentDbMesas;
-            
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
-            renderTablesGrid();
-            showToast("Nueva mesa agregada exitosamente.", "success");
+            mesas.push({ id: "M" + Date.now(), name: tableName.trim(), label: tableName.trim(), status: "Libre", items: [], waiter: "" });
+            syncToCloud(); // <-- Dispara la actualización a internet
+            showToast("Nueva mesa agregada en la nube.", "success");
         }
 
         function deleteCurrentTable() {
             if (!activeTable) return;
-            if (activeTable.items && activeTable.items.length > 0) {
-                showToast("No puedes eliminar una mesa con pedidos activos.", "error");
-                return;
-            }
-            
-            const confirmed = confirm(`¿Estás seguro de ELIMINAR la ${activeTable.name} del sistema permanentemente?`);
-            if (confirmed) {
-                // LECTURA FRESCA AL ELIMINAR
-                let currentDbMesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || mesas;
-                mesas = currentDbMesas.filter(m => m.id !== activeTable.id);
-                
-                localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
-                closeTableDrawer();
-                renderTablesGrid();
-                showToast("Mesa eliminada del sistema.", "info");
+            if (activeTable.items && activeTable.items.length > 0) { showToast("No puedes eliminar mesa con pedidos.", "error"); return; }
+            if (confirm(`¿ELIMINAR ${activeTable.name} del sistema permanentemente?`)) {
+                mesas = mesas.filter(m => m.id !== activeTable.id);
+                syncToCloud(); // <-- Dispara la actualización a internet
+                closeTableDrawer(); showToast("Mesa eliminada.", "info");
             }
         }
-
-        // --- ESCUCHADOR EN TIEMPO REAL MULTI-VENTANA ---
-        window.addEventListener('storage', function(e) {
-            if (e.key === DB_PREFIX + 'mesas_v2') {
-                const newMesas = JSON.parse(e.newValue || '[]');
-                
-                // VERIFICACIÓN QUIRÚRGICA: Detectar pedidos listos para lanzar alerta al mesero
-                newMesas.forEach(newMesa => {
-                    let oldMesa = mesas.find(m => m.id === newMesa.id);
-                    if (oldMesa) {
-                        let oldPending = oldMesa.items ? oldMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
-                        let newPending = newMesa.items ? newMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
-                        let hasListo = newMesa.items ? newMesa.items.some(i => i.status === 'Listo') : false;
-                        
-                        // Si antes tenía helados pendientes y ahora no, y tiene helados listos -> Alerta
-                        if (oldPending && !newPending && hasListo) {
-                            showToast(`¡El pedido de ${newMesa.name} está LISTO para despachar!`, 'success');
-                            if (navigator.vibrate) navigator.vibrate([200, 100, 200]); // Vibración en móviles
-                        }
-                    }
-                });
-
-                mesas = newMesas;
-                renderTablesGrid();
-                if (activeTable) {
-                    const matched = mesas.find(m => m.id === activeTable.id);
-                    if (matched) {
-                        activeTable = matched;
-                        waiterCart = [];
-                        if (activeTable.items) {
-                            activeTable.items.forEach(i => {
-                                waiterCart.push({
-                                    id: i.id,
-                                    name: i.name,
-                                    price: i.price,
-                                    quantity: i.quantity,
-                                    status: i.status || 'Pendiente',
-                                    note: i.note || ''
-                                });
-                            });
-                        }
-                        updateComandaUI();
-                    }
-                }
-            }
-            if (e.key === DB_PREFIX + 'products') {
-                products = JSON.parse(e.newValue || '[]');
-                renderWaiterMenu();
-            }
-            if (e.key === DB_PREFIX + 'waiterPass') {
-                // PIN de meseros modificado de forma externa
-                showToast("Clave de acceso de meseros actualizada desde el POS.", "info");
-            }
-        });
     </script>
 </body>
 </html>
