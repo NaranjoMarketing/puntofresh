@@ -1374,10 +1374,10 @@
         }
 
         function sanitizeProducts() {
+            // Se ha removido quirúrgicamente el filtro que borraba permanentemente "Cono Sencillo"
             products = products.filter(p => {
                 const hasNoId = !p.id || String(p.id).trim() === "" || String(p.id) === "undefined" || String(p.id) === "null";
-                const isConoSencillo = p.name && String(p.name).trim().toLowerCase() === "cono sencillo";
-                return !hasNoId && !isConoSencillo;
+                return !hasNoId;
             });
 
             products.forEach(p => {
