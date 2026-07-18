@@ -11,6 +11,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- LIBRERÍAS DE FIREBASE (NUBE) INYECTADAS QUIRÚRGICAMENTE -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -104,7 +108,7 @@
         }
     </style>
 </head>
-<body class="text-fresh-dark min-h-screen flex flex-col" onload="loadDataFromCloud()">
+<body class="text-fresh-dark min-h-screen flex flex-col" onload="initApp()">
 
     <!-- PANTALLA DE ACCESO / LOGIN -->
     <div id="login-screen" class="fixed inset-0 z-[200] bg-fresh-purple flex items-center justify-center p-4 transition-all duration-500">
@@ -420,7 +424,7 @@
 
     <!-- BANNER DINÁMICO DE CONFIGURACIÓN -->
     <div id="company-dynamic-banner" class="bg-fresh-pink text-fresh-purple py-2 px-4 font-bold text-center text-xs shadow-sm flex items-center justify-center gap-2">
-        <span id="banner-text-val">Caja Abierta y Sincronizada</span>
+        <span id="banner-text-val">Caja Abierta y Sincronizada a Firebase</span>
     </div>
 
     <!-- CONTENEDOR PRINCIPAL -->
@@ -1074,6 +1078,33 @@
     <script>
         const DB_PREFIX = "PUNTOFRESH_V1_"; 
         
+        // ==========================================
+        // ☁️ CONFIGURACIÓN QUIRÚRGICA DE FIREBASE ☁️
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBF553ngCo26v31YghnXzRBwETzxeXAhVk",
+            authDomain: "punto-fresh-inirida.firebaseapp.com",
+            projectId: "punto-fresh-inirida",
+            storageBucket: "punto-fresh-inirida.firebasestorage.app",
+            messagingSenderId: "71265530247",
+            appId: "1:71265530247:web:91465ff11146e745e42322"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const restauranteRef = db.collection('sistema').doc('estado_mesas');
+
+        // Función para enviar las mesas a internet en lugar de guardarlas localmente
+        async function syncToCloud() {
+            try {
+                await restauranteRef.set({ mesas: mesas }, { merge: true });
+            } catch (error) {
+                console.error("Error conectando a la nube: ", error);
+                showToast("Revisar conexión a internet.", "error");
+            }
+        }
+        // ==========================================
+
         let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
         let companyNIT = localStorage.getItem(DB_PREFIX + 'companyNIT') || "901.754.218-3";
         let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros - Inírida";
@@ -1219,6 +1250,8 @@
             localStorage.setItem(DB_PREFIX + 'clients', JSON.stringify(clients));
             localStorage.setItem(DB_PREFIX + 'cashRegisterState', JSON.stringify(cashRegisterState));
             localStorage.setItem(DB_PREFIX + 'cashAdjustments', JSON.stringify(cashAdjustments));
+            // Sincronización a la Nube (Firebase)
+            syncToCloud();
         }
 
         // ==========================================
@@ -1374,10 +1407,10 @@
         }
 
         function sanitizeProducts() {
-            // Se ha removido quirúrgicamente el filtro que borraba permanentemente "Cono Sencillo"
             products = products.filter(p => {
                 const hasNoId = !p.id || String(p.id).trim() === "" || String(p.id) === "undefined" || String(p.id) === "null";
-                return !hasNoId;
+                const isConoSencillo = p.name && String(p.name).trim().toLowerCase() === "cono sencillo";
+                return !hasNoId && !isConoSencillo;
             });
 
             products.forEach(p => {
@@ -1392,8 +1425,25 @@
             saveState();
         }
 
-        async function loadDataFromCloud() {
+        function initApp() {
             checkSession();
+            
+            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL
+            restauranteRef.onSnapshot((doc) => {
+                if (doc.exists) {
+                    mesas = doc.data().mesas || [];
+                    localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
+                    renderBillingTables();
+                    populatePOSTableSelect();
+                }
+            }, (error) => {
+                showToast("Desconectado de la Nube", "error");
+            });
+            
+            loadDataFromCloud();
+        }
+
+        async function loadDataFromCloud() {
             try {
                 if (esUrlDummy()) {
                     console.log("Cargando datos locales de forma segura (Offline).");
@@ -2460,8 +2510,7 @@
             table.waiter = 'Caja';
             table.label = document.getElementById('pos-client-name').value || table.name;
 
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new Event('storage'));
+            saveState();
 
             showToast(`Pedido de la ${table.name} enviado a cocina con éxito.`, "success");
             clearPOSCart();
