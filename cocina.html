@@ -7,9 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- LIBRERÍAS DE FIREBASE (NUBE) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -65,7 +69,7 @@
             <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Logo" class="h-12 w-auto object-contain" onerror="this.onerror=null;this.src='https://placehold.co/150x50/2E062B/white?text=POS';">
             <div>
                 <h1 class="text-white font-serif text-lg font-bold tracking-wide leading-none">Producción & Cocina</h1>
-                <p class="text-[10px] text-fresh-pink mt-1"><i class="fa-solid fa-circle text-emerald-500 animate-pulse text-[8px] mr-1"></i> Sincronización en Tiempo Real Activa</p>
+                <p class="text-[10px] text-fresh-pink mt-1"><i class="fa-solid fa-cloud text-emerald-500 animate-pulse text-[8px] mr-1"></i> Conectado a la Nube (Firebase)</p>
             </div>
         </div>
         
@@ -97,7 +101,6 @@
             </div>
         </div>
 
-        <!-- Selector de Vistas de Trabajo -->
         <div class="flex bg-neutral-100 p-1 rounded-xl border border-neutral-200">
             <button onclick="switchView('comandas')" id="view-comandas-btn" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-fresh-purple shadow-sm">
                 <i class="fa-solid fa-receipt mr-1"></i> Por Comandas / Mesas
@@ -110,49 +113,65 @@
 
     <!-- CONTENEDOR PRINCIPAL -->
     <main class="flex-grow p-4 md:p-6 overflow-y-auto">
-        
-        <!-- VISTA 1: COMANDAS INDIVUDIALES POR MESA -->
-        <section id="workspace-comandas" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            <!-- Se renderizan dinámicamente las tarjetas de mesas -->
-        </section>
+        <section id="workspace-comandas" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></section>
 
-        <!-- VISTA 2: CONSOLIDADO DE PRODUCCIÓN (OCULTA POR DEFECTO) -->
         <section id="workspace-consolidado" class="hidden max-w-2xl mx-auto bg-white p-6 rounded-3xl border border-fresh-pink/15 shadow-md">
             <h3 class="font-serif text-lg font-bold text-fresh-purple mb-4 border-b border-fresh-pink/10 pb-3 flex items-center justify-between">
-                <span><i class="fa-solid fa-table-list text-fresh-pink mr-1"></i> Helados en Fila de Producción de Hoy</span>
+                <span><i class="fa-solid fa-table-list text-fresh-pink mr-1"></i> Helados en Fila de Producción</span>
                 <span id="consolidated-count-badge" class="text-xs bg-fresh-lightPurple text-fresh-purple px-2.5 py-1 rounded-full font-black">0 Items</span>
             </h3>
-            <div id="consolidated-items-list" class="space-y-3">
-                <!-- Se inyecta la suma de artículos pendientes por preparar -->
-            </div>
+            <div id="consolidated-items-list" class="space-y-3"></div>
         </section>
 
-        <!-- PANTALLA EN BLANCO (SIN TRABAJO) -->
         <div id="empty-kitchen-state" class="hidden flex-col items-center justify-center text-center py-20 text-neutral-400">
             <div class="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">
                 <i class="fa-solid fa-circle-check"></i>
             </div>
             <h3 class="font-serif text-xl font-bold text-neutral-600 mb-1">¡Cocina al Día!</h3>
-            <p class="text-xs max-w-xs">No hay helados o comisiones de producción pendientes en este momento. ¡Buen trabajo!</p>
+            <p class="text-xs max-w-xs">No hay helados o comisiones de producción pendientes en este momento.</p>
         </div>
-
     </main>
 
-    <!-- FOOTER -->
     <footer class="bg-fresh-purple text-white py-3 text-center text-[10px] border-t border-fresh-pink/20 shrink-0">
         © 2026 PUNTO FRESH - Consola Despacho de Cocina de Alta Velocidad (Inírida).
     </footer>
 
-    <!-- SCRIPT DE LÓGICA Y AUDIO SINTETIZADO -->
+    <!-- SCRIPT DE LÓGICA Y CONEXIÓN CLOUD -->
     <script>
         const DB_PREFIX = "PUNTOFRESH_V1_";
         
-        let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
-        let currentView = 'comandas'; // 'comandas' o 'consolidado'
+        // ==========================================
+        // ☁️ CONFIGURACIÓN QUIRÚRGICA DE FIREBASE ☁️
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBF553ngCo26v31YghnXzRBwETzxeXAhVk",
+            authDomain: "punto-fresh-inirida.firebaseapp.com",
+            projectId: "punto-fresh-inirida",
+            storageBucket: "punto-fresh-inirida.firebasestorage.app",
+            messagingSenderId: "71265530247",
+            appId: "1:71265530247:web:91465ff11146e745e42322"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const restauranteRef = db.collection('sistema').doc('estado_mesas');
+
+        // Función para enviar las actualizaciones de cocina a internet
+        async function syncToCloud() {
+            try {
+                await restauranteRef.set({ mesas: mesas }, { merge: true });
+            } catch (error) {
+                console.error("Error conectando a la nube: ", error);
+                showToast("Revisar conexión a internet.", "error");
+            }
+        }
+        // ==========================================
+
+        let mesas = [];
+        let currentView = 'comandas'; 
         let audioEnabled = true;
         let lastKnownPendingCount = 0;
 
-        // --- SISTEMA DE TOASTS ---
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
             if(!container) return;
@@ -160,50 +179,33 @@
             let bg = 'bg-fresh-purple border-fresh-pink/20';
             if (type === 'success') bg = 'bg-emerald-600 border-white/20';
             if (type === 'error') bg = 'bg-rose-600 border-white/20';
-            
             toast.className = `mx-auto px-5 py-3 rounded-full text-white text-xs font-bold shadow-2xl transform transition-all duration-300 -translate-y-10 opacity-0 flex items-center justify-center gap-1.5 ${bg} border pointer-events-auto`;
             toast.innerHTML = `<i class="fa-solid fa-kitchen-set text-fresh-pink"></i> <span>${msg}</span>`;
             container.appendChild(toast);
             setTimeout(() => { toast.classList.remove('-translate-y-10', 'opacity-0'); }, 10);
-            setTimeout(() => { 
-                toast.classList.add('-translate-y-10', 'opacity-0'); 
-                setTimeout(() => toast.remove(), 300); 
-            }, 3000);
+            setTimeout(() => { toast.classList.add('-translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
         }
 
-        // --- ALERTA SONORA MEDIANTE SÍNTESIS DE AUDIO (SIN DEPENDER DE ARCHIVOS) ---
         function playNewOrderSound() {
             if (!audioEnabled) return;
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Nota 1 (Aguda)
                 const osc1 = audioCtx.createOscillator();
                 const gain1 = audioCtx.createGain();
-                osc1.connect(gain1);
-                gain1.connect(audioCtx.destination);
-                osc1.type = 'sine';
-                osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime); // Mi5
+                osc1.connect(gain1); gain1.connect(audioCtx.destination);
+                osc1.type = 'sine'; osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime);
                 gain1.gain.setValueAtTime(0.08, audioCtx.currentTime);
-                osc1.start();
-                osc1.stop(audioCtx.currentTime + 0.12);
+                osc1.start(); osc1.stop(audioCtx.currentTime + 0.12);
 
-                // Nota 2 (Aún más aguda para llamar la atención)
                 setTimeout(() => {
                     const osc2 = audioCtx.createOscillator();
                     const gain2 = audioCtx.createGain();
-                    osc2.connect(gain2);
-                    gain2.connect(audioCtx.destination);
-                    osc2.type = 'sine';
-                    osc2.frequency.setValueAtTime(880.00, audioCtx.currentTime); // La5
+                    osc2.connect(gain2); gain2.connect(audioCtx.destination);
+                    osc2.type = 'sine'; osc2.frequency.setValueAtTime(880.00, audioCtx.currentTime);
                     gain2.gain.setValueAtTime(0.08, audioCtx.currentTime);
-                    osc2.start();
-                    osc2.stop(audioCtx.currentTime + 0.15);
+                    osc2.start(); osc2.stop(audioCtx.currentTime + 0.15);
                 }, 130);
-
-            } catch (e) {
-                console.warn("No se pudo reproducir la alerta sonora de cocina debido a políticas del navegador.", e);
-            }
+            } catch (e) { }
         }
 
         function toggleAudio() {
@@ -215,26 +217,21 @@
             if (audioEnabled) {
                 btn.className = "px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10";
                 icon.className = "fa-solid fa-volume-high text-fresh-pink";
-                text.innerText = "Sonido Habilitado";
-                showToast("Alertas sonoras habilitadas.", "success");
+                text.innerText = "Sonido Habilitado"; showToast("Alertas sonoras habilitadas.", "success");
             } else {
                 btn.className = "px-3.5 py-2 bg-red-900/40 hover:bg-red-900/60 text-red-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-red-500/20";
                 icon.className = "fa-solid fa-volume-xmark";
-                text.innerText = "Sonido Silenciado";
-                showToast("Alertas sonoras silenciadas.", "info");
+                text.innerText = "Sonido Silenciado"; showToast("Alertas sonoras silenciadas.", "info");
             }
         }
 
-        // --- SISTEMA DE RELOJ DE COCINA ---
         function updateClock() {
             const clock = document.getElementById('clock-display');
             if(!clock) return;
-            const now = new Date();
-            clock.innerText = now.toTimeString().split(' ')[0];
+            clock.innerText = new Date().toTimeString().split(' ')[0];
         }
         setInterval(updateClock, 1000);
 
-        // --- VISTAS INTERACTIVAS ---
         function switchView(view) {
             currentView = view;
             const comandasBtn = document.getElementById('view-comandas-btn');
@@ -245,37 +242,29 @@
             if(view === 'comandas') {
                 comandasBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-fresh-purple shadow-sm";
                 consBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-neutral-600 hover:text-fresh-purple";
-                workspaceComandas.classList.remove('hidden');
-                workspaceConsolidado.classList.add('hidden');
+                workspaceComandas.classList.remove('hidden'); workspaceConsolidado.classList.add('hidden');
             } else {
                 comandasBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-neutral-600 hover:text-fresh-purple";
                 consBtn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-fresh-purple shadow-sm";
-                workspaceComandas.classList.add('hidden');
-                workspaceConsolidado.classList.remove('hidden');
+                workspaceComandas.classList.add('hidden'); workspaceConsolidado.classList.remove('hidden');
             }
             renderKitchen();
         }
 
-        // --- INICIALIZACIÓN ---
         function initKitchen() {
             updateClock();
-            loadKitchenData();
+            
+            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL
+            restauranteRef.onSnapshot((doc) => {
+                if (doc.exists) {
+                    mesas = doc.data().mesas || [];
+                    renderKitchen();
+                }
+            }, (error) => {
+                showToast("Desconectado de la Nube", "error");
+            });
         }
 
-        function loadKitchenData() {
-            mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
-            renderKitchen();
-        }
-
-        // --- DETECTAR CAMBIOS EN OTRAS PESTAÑAS (MÓVILES DE MESEROS O POS) ---
-        window.addEventListener('storage', function(e) {
-            if (e.key === DB_PREFIX + 'mesas_v2') {
-                mesas = JSON.parse(e.newValue || '[]');
-                renderKitchen();
-            }
-        });
-
-        // --- RENDERIZADO PRINCIPAL DE COCINA ---
         function renderKitchen() {
             const comContainer = document.getElementById('workspace-comandas');
             const consContainer = document.getElementById('consolidated-items-list');
@@ -284,13 +273,9 @@
             comContainer.innerHTML = '';
             consContainer.innerHTML = '';
 
-            // Filtrar mesas que contengan al menos un plato pendiente o en preparación
             let activeComandas = mesas.filter(m => m.items && m.items.length > 0 && m.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando'));
 
-            // Estadísticas Generales
-            let totalPending = 0;
-            let totalPreparing = 0;
-            let totalCompleted = 0;
+            let totalPending = 0; let totalPreparing = 0; let totalCompleted = 0;
 
             mesas.forEach(m => {
                 if(m.items) {
@@ -306,82 +291,52 @@
             document.getElementById('stat-preparing-qty').innerText = `${totalPreparing} helados`;
             document.getElementById('stat-completed-qty').innerText = `${totalCompleted} helados`;
 
-            // Alerta Sonora si el conteo de pendientes incrementa
             if (totalPending > lastKnownPendingCount) {
                 playNewOrderSound();
                 showToast("¡Nuevo helado ingresado para preparación!", "success");
             }
             lastKnownPendingCount = totalPending;
 
-            // Decidir si mostrar pantalla vacía
             if (activeComandas.length === 0) {
                 comContainer.classList.add('hidden');
                 consContainer.parentElement.classList.add('hidden');
-                emptyState.classList.remove('hidden');
-                emptyState.classList.add('flex');
+                emptyState.classList.remove('hidden'); emptyState.classList.add('flex');
                 return;
             } else {
-                emptyState.classList.add('hidden');
-                emptyState.classList.remove('flex');
-                if (currentView === 'comandas') {
-                    comContainer.classList.remove('hidden');
-                } else {
-                    consContainer.parentElement.classList.remove('hidden');
-                }
+                emptyState.classList.add('hidden'); emptyState.classList.remove('flex');
+                if (currentView === 'comandas') comContainer.classList.remove('hidden');
+                else consContainer.parentElement.classList.remove('hidden');
             }
 
-            // RENDER VISTA 1: COMANDAS INDIVIDUALES
+            // VISTA 1
             activeComandas.forEach(m => {
                 let itemsHtml = '';
                 m.items.forEach((item, itemIdx) => {
-                    // Ignorar platos ya listos o entregados para limpiar visualmente la pantalla
                     if (item.status === 'Listo' || item.status === 'Entregado') return;
-
                     let bgBadge = "bg-rose-50 text-rose-600 border border-rose-100";
                     let actionButton = '';
 
                     if (item.status === 'Pendiente') {
-                        actionButton = `
-                            <button onclick="changeItemStatus('${m.id}', ${itemIdx}, 'Preparando')" class="bg-fresh-purple hover:bg-fresh-dark text-white font-extrabold text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95 flex items-center gap-1">
-                                <i class="fa-solid fa-play text-fresh-pink"></i> Preparar
-                            </button>
-                        `;
+                        actionButton = `<button onclick="changeItemStatus('${m.id}', ${itemIdx}, 'Preparando')" class="bg-fresh-purple hover:bg-fresh-dark text-white font-extrabold text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95 flex items-center gap-1"><i class="fa-solid fa-play text-fresh-pink"></i> Preparar</button>`;
                     } else if (item.status === 'Preparando') {
                         bgBadge = "bg-purple-100 text-fresh-purple font-black border border-fresh-pink/40";
-                        actionButton = `
-                            <button onclick="changeItemStatus('${m.id}', ${itemIdx}, 'Listo')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95 flex items-center gap-1">
-                                <i class="fa-solid fa-check text-white"></i> Listo
-                            </button>
-                        `;
+                        actionButton = `<button onclick="changeItemStatus('${m.id}', ${itemIdx}, 'Listo')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95 flex items-center gap-1"><i class="fa-solid fa-check text-white"></i> Listo</button>`;
                     }
 
                     itemsHtml += `
                         <div class="p-3 bg-neutral-50/60 border border-neutral-200/80 rounded-xl space-y-1.5 shadow-xs">
                             <div class="flex justify-between items-start">
-                                <p class="font-bold text-xs text-fresh-purple">
-                                    <span class="bg-fresh-purple text-white px-2 py-0.5 rounded text-[10px] mr-1 font-black">${item.quantity}x</span> 
-                                    ${item.name}
-                                </p>
+                                <p class="font-bold text-xs text-fresh-purple"><span class="bg-fresh-purple text-white px-2 py-0.5 rounded text-[10px] mr-1 font-black">${item.quantity}x</span> ${item.name}</p>
                                 <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${bgBadge}">${item.status}</span>
                             </div>
-                            
-                            <!-- Nota interna de preparación -->
-                            <p class="text-[10px] italic text-neutral-500 font-medium bg-white px-2 py-1 rounded border border-neutral-100">
-                                <i class="fa-solid fa-comment-dots text-fresh-pink mr-1 text-[8px]"></i> 
-                                ${item.note ? `"${item.note}"` : "Sin especificaciones"}
-                            </p>
-
-                            <div class="flex justify-end pt-1">
-                                ${actionButton}
-                            </div>
-                        </div>
-                    `;
+                            <p class="text-[10px] italic text-neutral-500 font-medium bg-white px-2 py-1 rounded border border-neutral-100"><i class="fa-solid fa-comment-dots text-fresh-pink mr-1 text-[8px]"></i> ${item.note ? `"${item.note}"` : "Sin especificaciones"}</p>
+                            <div class="flex justify-end pt-1">${actionButton}</div>
+                        </div>`;
                 });
 
                 comContainer.innerHTML += `
                     <div class="bg-white border border-fresh-pink/15 p-4 rounded-3xl shadow-sm flex flex-col justify-between h-fit relative">
                         <div>
-                            <!-- Cabecera de la comanda -->
                             <div class="flex justify-between items-start border-b border-fresh-pink/10 pb-2 mb-3">
                                 <div>
                                     <h4 class="font-serif text-sm font-black text-fresh-purple uppercase truncate max-w-[150px]">${m.label || m.name}</h4>
@@ -389,39 +344,27 @@
                                 </div>
                                 <span class="text-[9px] bg-neutral-100 border border-neutral-200 text-neutral-600 px-2 py-1 rounded-full font-black uppercase">${m.id}</span>
                             </div>
-
-                            <!-- Listado de Helados -->
-                            <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                                ${itemsHtml}
-                            </div>
+                            <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1">${itemsHtml}</div>
                         </div>
-
-                        <!-- Listo Todo -->
                         <div class="border-t border-neutral-100 pt-3 mt-4">
                             <button onclick="completeAllItems('${m.id}')" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2.5 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-circle-check"></i> Terminar Comanda Completa
                             </button>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
 
-            // RENDER VISTA 2: CONSOLIDADO DE PRODUCCIÓN
+            // VISTA 2
             let consolidatedProducts = {};
             mesas.forEach(m => {
                 if(m.items) {
                     m.items.forEach(i => {
                         if (i.status === 'Pendiente' || i.status === 'Preparando') {
-                            if (!consolidatedProducts[i.name]) {
-                                consolidatedProducts[i.name] = { qty: 0, statusPending: 0, statusPreparing: 0, notes: [] };
-                            }
+                            if (!consolidatedProducts[i.name]) consolidatedProducts[i.name] = { qty: 0, statusPending: 0, statusPreparing: 0, notes: [] };
                             consolidatedProducts[i.name].qty += i.quantity;
                             if (i.status === 'Pendiente') consolidatedProducts[i.name].statusPending += i.quantity;
                             if (i.status === 'Preparando') consolidatedProducts[i.name].statusPreparing += i.quantity;
-                            
-                            if (i.note) {
-                                consolidatedProducts[i.name].notes.push(`${i.quantity}x: "${i.note}" (${m.name})`);
-                            }
+                            if (i.note) consolidatedProducts[i.name].notes.push(`${i.quantity}x: "${i.note}" (${m.name})`);
                         }
                     });
                 }
@@ -434,12 +377,7 @@
                 const info = consolidatedProducts[pName];
                 let notesHtml = '';
                 if (info.notes.length > 0) {
-                    notesHtml = `
-                        <div class="bg-amber-50/50 p-2 rounded-lg border border-amber-100 mt-2 text-[9px] text-amber-900 font-medium space-y-0.5">
-                            <p class="font-bold text-[8px] uppercase tracking-wider text-amber-700">Notas específicas de preparación:</p>
-                            ${info.notes.map(n => `<p>• ${n}</p>`).join('')}
-                        </div>
-                    `;
+                    notesHtml = `<div class="bg-amber-50/50 p-2 rounded-lg border border-amber-100 mt-2 text-[9px] text-amber-900 font-medium space-y-0.5"><p class="font-bold text-[8px] uppercase tracking-wider text-amber-700">Notas específicas de preparación:</p>${info.notes.map(n => `<p>• ${n}</p>`).join('')}</div>`;
                 }
 
                 consContainer.innerHTML += `
@@ -449,65 +387,41 @@
                                 <h4 class="font-black text-sm text-fresh-purple uppercase">${pName}</h4>
                                 <span class="bg-fresh-purple text-white font-black px-2.5 py-0.5 rounded-md text-xs">${info.qty} unidades</span>
                             </div>
-                            
-                            <!-- Desglose por estados -->
                             <div class="flex gap-2.5 text-[10px] text-neutral-500 font-semibold mt-1">
                                 ${info.statusPending > 0 ? `<span>🟠 Pendientes: <b class="text-rose-500 font-black">${info.statusPending}</b></span>` : ''}
                                 ${info.statusPreparing > 0 ? `<span>🟣 Preparando: <b class="text-fresh-purple font-black">${info.statusPreparing}</b></span>` : ''}
                             </div>
-                            
                             ${notesHtml}
                         </div>
-                        
                         <div class="flex sm:flex-col gap-1.5 justify-center shrink-0">
-                            ${info.statusPending > 0 ? `
-                                <button onclick="changeBulkStatus('${pName}', 'Preparando')" class="bg-fresh-purple text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-sm transition active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-play"></i> Preparar Todo
-                                </button>
-                            ` : ''}
-                            ${info.statusPreparing > 0 ? `
-                                <button onclick="changeBulkStatus('${pName}', 'Listo')" class="bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-sm transition active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-circle-check"></i> Terminar Todo
-                                </button>
-                            ` : ''}
+                            ${info.statusPending > 0 ? `<button onclick="changeBulkStatus('${pName}', 'Preparando')" class="bg-fresh-purple text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-sm transition active:scale-95 flex items-center gap-1"><i class="fa-solid fa-play"></i> Preparar Todo</button>` : ''}
+                            ${info.statusPreparing > 0 ? `<button onclick="changeBulkStatus('${pName}', 'Listo')" class="bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl shadow-sm transition active:scale-95 flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Terminar Todo</button>` : ''}
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
         }
 
         // ==========================================
-        // 🔄 ACCIONES DE CAMBIO DE ESTADOS (KITCHEN)
+        // 🔄 ACCIONES DE KITCHEN HACIA LA NUBE
         // ==========================================
         function changeItemStatus(tableId, itemIdx, newStatus) {
-            const table = mesas.find(m => m.id === tableId);
-            if (!table) return;
-
-            table.items[itemIdx].status = newStatus;
-
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            // Forzar actualización inmediata de listeners de storage en la misma pestaña
-            window.dispatchEvent(new Event('storage'));
-            
-            showToast("Estado de preparación de helado actualizado.", "success");
-            renderKitchen();
+            let tableIndex = mesas.findIndex(m => m.id === tableId);
+            if (tableIndex !== -1) {
+                mesas[tableIndex].items[itemIdx].status = newStatus;
+                syncToCloud(); // Sincroniza la acción a internet
+                showToast("Estado de preparación actualizado.", "success");
+            }
         }
 
         function completeAllItems(tableId) {
-            const table = mesas.find(m => m.id === tableId);
-            if (!table) return;
-
-            table.items.forEach(item => {
-                if(item.status === 'Pendiente' || item.status === 'Preparando') {
-                    item.status = 'Listo';
-                }
-            });
-
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new Event('storage'));
-            
-            showToast("Toda la comanda ha sido marcada como LISTO.", "success");
-            renderKitchen();
+            let tableIndex = mesas.findIndex(m => m.id === tableId);
+            if (tableIndex !== -1) {
+                mesas[tableIndex].items.forEach(item => {
+                    if(item.status === 'Pendiente' || item.status === 'Preparando') item.status = 'Listo';
+                });
+                syncToCloud(); // Sincroniza la acción a internet
+                showToast("Toda la comanda marcada como LISTO.", "success");
+            }
         }
 
         function changeBulkStatus(productName, newStatus) {
@@ -515,22 +429,14 @@
                 if(m.items) {
                     m.items.forEach(item => {
                         if (item.name === productName) {
-                            if (newStatus === 'Preparando' && item.status === 'Pendiente') {
-                                item.status = 'Preparando';
-                            }
-                            if (newStatus === 'Listo' && item.status === 'Preparando') {
-                                item.status = 'Listo';
-                            }
+                            if (newStatus === 'Preparando' && item.status === 'Pendiente') item.status = 'Preparando';
+                            if (newStatus === 'Listo' && item.status === 'Preparando') item.status = 'Listo';
                         }
                     });
                 }
             });
-
-            localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new Event('storage'));
-            
-            showToast(`Lote de "${productName}" actualizado a: ${newStatus.toUpperCase()}`, "success");
-            renderKitchen();
+            syncToCloud(); // Sincroniza la acción a internet
+            showToast(`Lote actualizado a: ${newStatus.toUpperCase()}`, "success");
         }
     </script>
 </body>
