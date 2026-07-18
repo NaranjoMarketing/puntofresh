@@ -188,7 +188,7 @@
     </footer>
 
     <!-- BOTÓN FLOTANTE CARRITO (MÓVIL) -->
-    <button onclick="toggleCartDrawer(true)" id="mobile-cart-btn" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40 bg-fresh-purple hover:bg-fresh-dark text-white p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 transform active:scale-95 transition-all border border-fresh-pink/20">
+    <button onclick="toggleCartDrawer(true)" id="mobile-cart-btn" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40 bg-fresh-purple hover:bg-fresh-dark text-white p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 transform active:scale-95 transition-all border border-fresh-pink/20 scale-0">
         <div class="relative">
             <i class="fa-solid fa-cart-shopping text-lg"></i>
             <span id="cart-badge" class="absolute -top-3 -right-3 bg-fresh-pink text-fresh-purple font-extrabold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-fresh-purple">0</span>
@@ -335,6 +335,11 @@
         // URL DE TU GOOGLE APPS SCRIPT (Asegúrate de que sea la misma del POS)
         const URL_API = 'https://script.google.com/macros/s/AKfycbyEMUFe0c-Nelpo_Q7OShxYwzodE_Pd1NAJDoblCKr-RJDkyGU2208deURVIFSMgk3x/exec';
 
+        // --- FUNCIÓN DE LIMPIEZA DE TILDES PARA BUSCADOR INTELIGENTE ---
+        function removeAccents(str) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+
         // --- SINCRONIZACIÓN CON LA NUBE ---
         async function loadDataFromCloud() {
             try {
@@ -379,18 +384,6 @@
         let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3213169929";
         let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "76336493613";
 
-        // --- DEFINICIÓN DE LAS CATEGORÍAS DIRECTAMENTE DESDE EL JAVASCRIPT ---
-        const APP_CATEGORIES = [
-            "Todos",
-            "Nativos y Saludables",
-            "Granizados",
-            "Kids",
-            "Gelato",
-            "Malteadas",
-            "Fresas Locas",
-            "Micheladas y Sodas"
-        ];
-
         // Colecciones
         let products = [];
         let cart = [];
@@ -400,9 +393,9 @@
 
         // Productos de demostración iniciales (en caso de que el catálogo esté vacío)
         const DEFAULT_PRODUCTS = [
-            { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Nativos y Saludables", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
-            { id: "DEMO-2", name: "Granizado de Café", desc: "Café de origen granizado con un toque de crema de leche y salsa de caramelo.", category: "Granizados", measure: "Unidad", cost: 2500, price: 7500, stock: 40, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 8, isSpecial: false },
-            { id: "DEMO-3", name: "Gelato Frutos Rojos", desc: "Helado cremoso de frutos del bosque, sin adición de azúcar.", category: "Nativos y Saludables", measure: "Unidad", cost: 3000, price: 8000, stock: 35, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 22, isSpecial: true },
+            { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Sabores Fresh", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
+            { id: "DEMO-2", name: "Granizado de Café", desc: "Café de origen granizado con un toque de crema de leche y salsa de caramelo.", category: "Café", measure: "Unidad", cost: 2500, price: 7500, stock: 40, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 8, isSpecial: false },
+            { id: "DEMO-3", name: "Gelato Frutos Rojos", desc: "Helado cremoso de frutos del bosque, sin adición de azúcar.", category: "Gelato", measure: "Unidad", cost: 3000, price: 8000, stock: 35, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 22, isSpecial: true },
             { id: "DEMO-4", name: "Cono Especial Kids", desc: "Mini cono de vainilla decorado con gomitas y chispas de colores.", category: "Kids", measure: "Unidad", cost: 1500, price: 4500, stock: 60, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 5, isSpecial: false },
             { id: "DEMO-5", name: "Malteada Tentación Oreo", desc: "Cremosa malteada preparada con helado artesanal, galletas Oreo y chantilly.", category: "Malteadas", measure: "Unidad", cost: 3500, price: 9800, stock: 30, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 15, isSpecial: false }
         ];
@@ -455,7 +448,7 @@
                 localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
             }
 
-            // Construir categorías disponibles en base a la lista creada en el JS
+            // Construir categorías disponibles en base a la lista de productos
             buildCategoriesMenu();
             renderSpecials();
             renderProducts();
@@ -467,13 +460,25 @@
             loadDataFromCloud();
         }
 
-        // --- GENERADOR DE MENÚ DE CATEGORÍAS (DESDE JAVASCRIPT) ---
+        // --- GENERADOR DE MENÚ DE CATEGORÍAS (DINÁMICO CON ORDEN ESTRICTO) ---
         function buildCategoriesMenu() {
             const container = document.getElementById('category-pills-container');
             if(!container) return;
             container.innerHTML = '';
 
-            APP_CATEGORIES.forEach(cat => {
+            // Definir el orden de prioridad solicitado
+            const priorityOrder = ["Todos", "Sabores Fresh", "Gelato", "Café"];
+            
+            // Extraer las categorías únicas que existen actualmente en los productos
+            const productCats = [...new Set(products.map(p => p.category))].filter(Boolean);
+            
+            // Filtrar las que no están en el orden de prioridad para ponerlas al final
+            const otherCats = productCats.filter(c => !priorityOrder.includes(c));
+            
+            // Unir la lista final garantizando el orden
+            const appCategories = [...priorityOrder, ...otherCats];
+
+            appCategories.forEach(cat => {
                 const isActive = cat === selectedCategory;
                 const icon = getCategoryIcon(cat);
                 container.innerHTML += `
@@ -487,10 +492,12 @@
         function getCategoryIcon(cat) {
             switch(cat) {
                 case 'Todos': return '<i class="fa-solid fa-border-all"></i>';
+                case 'Sabores Fresh': return '<i class="fa-solid fa-leaf text-emerald-500"></i>';
+                case 'Gelato': return '<i class="fa-solid fa-ice-cream text-fresh-pink"></i>';
+                case 'Café': return '<i class="fa-solid fa-mug-hot text-amber-700"></i>';
                 case 'Nativos y Saludables': return '<i class="fa-solid fa-leaf text-emerald-500"></i>';
                 case 'Granizados': return '<i class="fa-solid fa-snowflake text-cyan-400"></i>';
                 case 'Kids': return '<i class="fa-solid fa-face-laugh-beam text-amber-500"></i>';
-                case 'Gelato': return '<i class="fa-solid fa-ice-cream text-fresh-pink"></i>';
                 case 'Malteadas': return '<i class="fa-solid fa-glass-water-droplet"></i>';
                 case 'Fresas Locas': return '<i class="fa-solid fa-stroopwafel text-red-400"></i>';
                 case 'Micheladas y Sodas': return '<i class="fa-solid fa-whiskey-glass text-amber-600"></i>';
@@ -549,23 +556,44 @@
             });
         }
 
-        // --- FILTRAR Y RENDERIZAR HELADOS ---
+        // --- FILTRAR Y RENDERIZAR HELADOS (CON BUSCADOR INTELIGENTE Y ORDENAMIENTO EN TODOS) ---
         function renderProducts() {
             const grid = document.getElementById('menu-grid');
             const emptyState = document.getElementById('empty-state');
             if(!grid || !emptyState) return;
+            
+            // Obtenemos el texto y lo limpiamos de tildes
             const search = document.getElementById('search-input').value.toLowerCase();
+            const searchClean = removeAccents(search);
 
-            let filtered = products;
+            // Clonamos el arreglo para no modificar el original permanentemente
+            let filtered = [...products];
 
-            // Filtro por categoría
+            // Filtro por categoría o reordenamiento si es "Todos"
             if (selectedCategory !== 'Todos') {
                 filtered = filtered.filter(p => p.category === selectedCategory);
+            } else {
+                // Ordenar por categoría de forma estricta cuando estamos viendo "Todos"
+                const priorityOrder = ["Sabores Fresh", "Gelato", "Café"];
+                filtered.sort((a, b) => {
+                    let indexA = priorityOrder.indexOf(a.category);
+                    let indexB = priorityOrder.indexOf(b.category);
+                    
+                    if (indexA === -1) indexA = 999;
+                    if (indexB === -1) indexB = 999;
+                    
+                    if (indexA !== indexB) return indexA - indexB;
+                    return (a.category || "").localeCompare(b.category || "");
+                });
             }
 
-            // Filtro por búsqueda de texto
-            if (search) {
-                filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || (p.desc && p.desc.toLowerCase().includes(search)));
+            // Filtro por búsqueda de texto ignorando tildes y mayúsculas
+            if (searchClean) {
+                filtered = filtered.filter(p => {
+                    const nameClean = removeAccents((p.name || '').toLowerCase());
+                    const descClean = removeAccents((p.desc || '').toLowerCase());
+                    return nameClean.includes(searchClean) || descClean.includes(searchClean);
+                });
             }
 
             if (filtered.length === 0) {
