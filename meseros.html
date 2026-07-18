@@ -413,7 +413,7 @@
                         if(i.status === 'Listo') i.status = 'Entregado';
                     });
                     localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                    window.dispatchEvent(new Event('storage'));
+                    window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
                     showToast("Pedido entregado en mesa exitosamente.", "success");
                     renderTablesGrid();
                     return; // Retornamos para no abrir el cajón de toma de pedidos
@@ -425,6 +425,8 @@
                 activeTable.items.forEach(i => {
                     waiterCart.push({
                         id: i.id,
+                        uid: i.uid,
+                        timestamp: i.timestamp,
                         name: i.name,
                         price: i.price,
                         quantity: i.quantity,
@@ -601,6 +603,8 @@
             } else {
                 waiterCart.push({
                     id: p.id,
+                    uid: "item_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                    timestamp: Date.now(),
                     name: p.name,
                     price: p.price,
                     quantity: 1,
@@ -660,7 +664,10 @@
             }
 
             localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
+            
+            // Emisión de evento preventivo por si la cocina escucha el canal global de órdenes
+            try { window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'orders', newValue: localStorage.getItem(DB_PREFIX + 'orders') || '[]' })); } catch(e) {}
 
             showToast("¡Pedido guardado y enviado a la cocina!", "success");
             closeTableDrawer();
@@ -676,7 +683,7 @@
 
             activeTable.status = "Cuenta";
             localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
 
             showToast("¡Caja notificada de solicitud de cuenta!", "success");
             closeTableDrawer();
@@ -693,7 +700,7 @@
                 activeTable.waiter = "";
 
                 localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                window.dispatchEvent(new Event('storage'));
+                window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
 
                 showToast("Mesa liberada por completo.", "info");
                 closeTableDrawer();
@@ -718,7 +725,7 @@
             
             mesas.push(newMesa);
             localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
             renderTablesGrid();
             showToast("Nueva mesa agregada exitosamente.", "success");
         }
@@ -734,7 +741,7 @@
             if (confirmed) {
                 mesas = mesas.filter(m => m.id !== activeTable.id);
                 localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
-                window.dispatchEvent(new Event('storage'));
+                window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
                 closeTableDrawer();
                 renderTablesGrid();
                 showToast("Mesa eliminada del sistema.", "info");
