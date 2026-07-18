@@ -665,9 +665,6 @@
 
             localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
             window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'mesas_v2', newValue: JSON.stringify(mesas) }));
-            
-            // Emisión de evento preventivo por si la cocina escucha el canal global de órdenes
-            try { window.dispatchEvent(new StorageEvent('storage', { key: DB_PREFIX + 'orders', newValue: localStorage.getItem(DB_PREFIX + 'orders') || '[]' })); } catch(e) {}
 
             showToast("¡Pedido guardado y enviado a la cocina!", "success");
             closeTableDrawer();
