@@ -7,13 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <!-- LIBRERÍAS DE FIREBASE (NUBE) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-
+    <!-- Firebase SDK (Inyección Quirúrgica) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    
     <script>
         tailwind.config = {
             theme: {
@@ -108,7 +108,7 @@
                     </div>
                 </div>
                 
-                <!-- Columna Derecha: Contenedor con Fusión de Degradados Líquidos -->
+                <!-- Columna Derecha: Contenedor con Fusión de Degradados Líquidos (Evita el parche) -->
                 <div class="md:col-span-5 relative min-h-[220px] md:min-h-[300px] overflow-hidden bg-fresh-dark">
                     <!-- Imagen Promocional 1:1 -->
                     <img id="banner-img-display" src="https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png" alt="Toppings" class="w-full h-full object-cover transition-transform duration-700 hover:scale-105" onerror="this.onerror=null;this.src='https://placehold.co/400x400/2E062B/white?text=Punto+Fresh';">
@@ -170,15 +170,18 @@
     <footer class="bg-fresh-purple text-fresh-lightPurple py-8 border-t-4 border-fresh-pink shrink-0">
         <div class="max-w-5xl mx-auto px-4 flex flex-col items-center gap-5 text-center">
             
+            <!-- Botón Cápsula del Directorio Inírida Comercial -->
             <a href="https://iniridacomercial.vercel.app/" target="_blank" class="inline-flex items-center gap-2 bg-[#F29400] hover:bg-[#E08600] text-fresh-purple font-extrabold px-7 py-3 rounded-full shadow-lg transition duration-300 text-xs md:text-sm uppercase tracking-wider transform hover:scale-105 active:scale-95">
                 <i class="fa-solid fa-map-location-dot text-sm"></i>
                 <span>Ver en el Directorio Inírida Comercial</span>
             </a>
 
+            <!-- Copyright Oficial -->
             <p class="text-xs md:text-sm text-fresh-cream/95 font-medium tracking-wide mt-2">
                 © 2026 PUNTO FRESH. "Refresca y endulza tu vida" - Helado Soft Artesanal.
             </p>
 
+            <!-- Atribución de Desarrollador JrNaranjo -->
             <p class="text-[10px] md:text-xs text-neutral-400 font-light tracking-wide">
                 Plataforma desarrollada por <span class="font-bold text-white">JrNaranjo</span> | 
                 <a href="https://wa.me/573102881717" target="_blank" class="hover:text-fresh-pink transition duration-200 inline-flex items-center gap-1 font-semibold">
@@ -201,6 +204,7 @@
     <div id="cart-drawer-overlay" class="fixed inset-0 bg-fresh-purple/75 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300" onclick="toggleCartDrawer(false)">
         <div class="fixed right-0 top-0 bottom-0 max-w-md w-[88%] bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col" onclick="event.stopPropagation()" id="cart-drawer-panel">
             
+            <!-- Cabecera -->
             <div class="p-4 border-b border-fresh-pink/10 bg-fresh-lightPurple/50 flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-ice-cream text-fresh-purple"></i>
@@ -209,12 +213,16 @@
                 <button onclick="toggleCartDrawer(false)" class="text-neutral-500 hover:text-fresh-purple p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
 
+            <!-- Listado de Artículos -->
             <div id="cart-drawer-items" class="flex-grow overflow-y-auto p-4 space-y-3">
+                <!-- Se inyecta dinámicamente -->
             </div>
 
+            <!-- Formulario y Despacho -->
             <div class="p-4 bg-neutral-50 border-t border-fresh-pink/10 text-xs space-y-3">
                 <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px]">Información de Despacho</p>
                 
+                <!-- Tipo de Servicio -->
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="setDeliveryType('Llevar')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
                         <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Llevar / Recoger
@@ -229,6 +237,7 @@
                     
                     <input type="number" id="cust-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-medium text-fresh-purple outline-none focus:border-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                     
+                    <!-- Dirección condicional para Domicilio -->
                     <div id="domicilio-fields" class="hidden space-y-2">
                         <input type="text" id="cust-address" placeholder="Dirección completa del domicilio *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                         <input type="text" id="cust-address-obs" placeholder="Observaciones para llegar a la dirección * (ej. Casa verde)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
@@ -237,6 +246,7 @@
                     <input type="text" id="cust-comment" placeholder="¿Alguna instrucción? (Sin mani, extra salsa...)" class="w-full bg-white border border-fresh-pink/10 py-2 px-3 rounded-lg text-neutral-600 outline-none">
                 </div>
 
+                <!-- Método de Pago del Cliente -->
                 <div>
                     <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px] mb-1.5">Método de Pago</p>
                     <div class="grid grid-cols-3 gap-2">
@@ -246,22 +256,26 @@
                     </div>
                 </div>
 
+                <!-- Campo condicional para pago en Efectivo (Con cuánto va a pagar) -->
                 <div id="cash-change-field" class="hidden">
                     <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">¿Con cuánto billete vas a cancelar? *</label>
                     <input type="text" id="cust-cash-bill" placeholder="Ej: Pago con billete de $50.000" class="w-full bg-white border border-fresh-pink/20 py-2 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                 </div>
             </div>
 
+            <!-- Footer del Drawer (Totales y Acción) -->
             <div class="p-4 border-t border-fresh-pink/10 space-y-3 bg-white shrink-0">
                 <div class="space-y-1">
                     <div class="flex justify-between text-xs text-neutral-500">
                         <span>Subtotal:</span>
                         <span id="drawer-subtotal">$0</span>
                     </div>
+                    <!-- Fila de Costo de Envío Domicilio -->
                     <div id="drawer-delivery-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Costo Envío:</span>
                         <span>$2.000</span>
                     </div>
+                    <!-- Fila de Costo de Empaque Domicilio -->
                     <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Empaques ($2.000 c/u):</span>
                         <span id="drawer-packaging-cost">$0</span>
@@ -271,7 +285,6 @@
                         <span id="drawer-total">$0</span>
                     </div>
                 </div>
-                <!-- Botón clave que ejecuta el envío a caja/firebase -->
                 <button onclick="submitClientOrder()" class="w-full bg-fresh-purple hover:bg-fresh-dark text-white font-bold py-3.5 rounded-2xl text-xs shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
                     <i class="fa-solid fa-paper-plane text-fresh-pink"></i> Enviar Pedido a Caja
                 </button>
@@ -289,6 +302,7 @@
             <p id="toppings-subtitle" class="text-xs text-neutral-500 mb-4 font-bold">Puedes elegir hasta <span id="toppings-max-count" class="text-fresh-purple text-sm font-black"></span> opciones.</p>
 
             <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="toppings-list">
+                <!-- Los checkboxes de los toppings se inyectan aquí dinámicamente -->
             </div>
 
             <div class="flex gap-3 justify-end shrink-0 pt-4 border-t border-fresh-pink/10">
@@ -308,6 +322,7 @@
             <p class="text-xs text-neutral-500 mb-4 font-bold">Cada adición extra tiene un valor de <span class="text-emerald-600 text-sm font-black">$4.000</span> c/u.</p>
 
             <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="extra-toppings-list">
+                <!-- Se inyectan dinámicamente -->
             </div>
 
             <div class="flex gap-3 justify-end shrink-0 pt-4 border-t border-fresh-pink/10">
@@ -319,11 +334,7 @@
 
     <!-- SCRIPT DE NEGOCIO -->
     <script>
-        const DB_PREFIX = "PUNTOFRESH_V1_";
-
-        // ==========================================
-        // ☁️ CONEXIÓN QUIRÚRGICA A FIREBASE (NUBE) ☁️
-        // ==========================================
+        // --- INICIALIZACIÓN DE FIREBASE (Inyección Quirúrgica) ---
         const firebaseConfig = {
             apiKey: "AIzaSyBF553ngCo26v31YghnXzRBwETzxeXAhVk",
             authDomain: "punto-fresh-inirida.firebaseapp.com",
@@ -334,11 +345,9 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        
-        // Creamos una colección específica para pedidos web entrantes
-        const pedidosWebRef = db.collection('sistema').doc('pedidos_web');
-        // ==========================================
+        // -----------------------------------------------------------
 
+        const DB_PREFIX = "PUNTOFRESH_V1_";
         const URL_API = 'https://script.google.com/macros/s/AKfycbyEMUFe0c-Nelpo_Q7OShxYwzodE_Pd1NAJDoblCKr-RJDkyGU2208deURVIFSMgk3x/exec';
 
         function removeAccents(str) {
@@ -371,21 +380,19 @@
             renderProducts();
         }
 
-        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717"; 
+        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
         let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros";
         let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
-
         let bannerTitle = localStorage.getItem(DB_PREFIX + 'bannerTitle') || "Refresca y endulza tu vida";
         let bannerDesc = localStorage.getItem(DB_PREFIX + 'bannerDesc') || "Disfruta de nuestros espectaculares helados soft creados con ingredientes de la más alta calidad, granizados naturales, fresas locas y exquisitas sodas frutales en Inírida.";
         let announcementMessage = localStorage.getItem(DB_PREFIX + 'announcementMessage') || "¡Ingredientes naturales seleccionados diariamente!";
-
         let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3213169929";
         let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "76336493613";
 
         let products = [];
         let cart = [];
         let selectedCategory = 'Todos';
-        let deliveryType = 'Llevar'; 
+        let deliveryType = 'Llevar';
         let paymentMethod = 'Nequi';
 
         const DEFAULT_PRODUCTS = [
@@ -497,7 +504,7 @@
         function scrollSpecials(direction) {
             const slider = document.getElementById('specials-slider');
             if(!slider) return;
-            const scrollAmount = 240; 
+            const scrollAmount = 240;
             if (direction === 'left') {
                 slider.scrollLeft -= scrollAmount;
             } else {
@@ -553,8 +560,10 @@
                 filtered.sort((a, b) => {
                     let indexA = priorityOrder.indexOf(a.category);
                     let indexB = priorityOrder.indexOf(b.category);
+                    
                     if (indexA === -1) indexA = 999;
                     if (indexB === -1) indexB = 999;
+                    
                     if (indexA !== indexB) return indexA - indexB;
                     return (a.category || "").localeCompare(b.category || "");
                 });
@@ -909,9 +918,6 @@
             }
         }
 
-        // ==============================================================
-        // 🚀 PROCESO DE REGISTRO Y ENVÍO DE PEDIDOS WEB A FIREBASE
-        // ==============================================================
         function submitClientOrder() {
             if (cart.length === 0) {
                 showToast("Tu carrito se encuentra vacío.", "error");
@@ -921,8 +927,10 @@
             const name = document.getElementById('cust-name').value.trim();
             const phone = document.getElementById('cust-phone').value.trim();
             const comment = document.getElementById('cust-comment').value.trim();
+            
             const address = document.getElementById('cust-address').value.trim();
             const addressObs = document.getElementById('cust-address-obs').value.trim();
+            
             const cashBill = document.getElementById('cust-cash-bill').value.trim();
 
             if (!name || !phone) {
@@ -964,34 +972,22 @@
                 status: 'Pendiente'
             };
 
-            // 1. Guardar en LocalStorage para alertar al POS localmente (Como respaldo en PC)
+            // --- INYECCIÓN QUIRÚRGICA FIREBASE ---
+            try {
+                db.collection('pedidos_web').doc(orderId).set(newWebOrder).catch(e => console.error("Error Firebase:", e));
+            } catch(e) {
+                console.warn("Error con Firebase", e);
+            }
+            // -------------------------------------
+
             let pending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
             pending.push(newWebOrder);
             localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pending));
+            window.dispatchEvent(new Event('storage'));
 
-            // 2. Disparar evento de storage manual (usando StorageEvent para que funcione local)
-            window.dispatchEvent(new StorageEvent('storage', { 
-                key: DB_PREFIX + 'pendingWebOrders', 
-                newValue: JSON.stringify(pending) 
-            }));
-
-            // 3. ENVIAR A LA NUBE DE FIREBASE (EL INJERTO QUIRÚRGICO MÁS IMPORTANTE)
-            try {
-                pedidosWebRef.get().then((docSnapshot) => {
-                    let firebasePending = [];
-                    if (docSnapshot.exists && docSnapshot.data().pedidos) {
-                        firebasePending = docSnapshot.data().pedidos;
-                    }
-                    firebasePending.push(newWebOrder);
-                    pedidosWebRef.set({ pedidos: firebasePending }, { merge: true });
-                }).catch(err => console.error("Error enviando a Nube:", err));
-            } catch(e) { console.warn("Error Firebase:", e); }
-
-            // 4. Crear mensaje de WhatsApp
             const waMessage = buildWhatsAppMessage(newWebOrder, rawSubtotal, deliveryFee, packagingFee, finalTotal, addressObs, cashBill);
             const waUrl = `https://wa.me/57${companyPhone}?text=${encodeURIComponent(waMessage)}`;
 
-            // 5. Limpiar estado de la aplicación
             cart = [];
             updateCartBadge();
             toggleCartDrawer(false);
@@ -1004,8 +1000,6 @@
             document.getElementById('cust-cash-bill').value = '';
 
             showToast("¡Pedido enviado a la caja con éxito!", "success");
-            
-            // Abriendo Whatsapp para confirmar
             setTimeout(() => {
                 window.open(waUrl, '_blank');
             }, 1000);
