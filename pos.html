@@ -465,7 +465,7 @@
                 </div>
             </div>
 
-            <!-- NUEVO: PANEL DE ENTRADAS Y SALIDAS AUXILIARES DE DINERO -->
+            <!-- PANEL DE ENTRADAS Y SALIDAS AUXILIARES DE DINERO -->
             <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                 <div class="md:col-span-1">
                     <h3 class="font-serif text-sm font-black text-fresh-purple flex items-center gap-2">
@@ -614,7 +614,7 @@
                             <i class="fa-solid fa-paper-plane"></i> Enviar Pedido a Cocina
                         </button>
 
-                        <!-- BOTÓN UNIFICADO DE FACTURACIÓN (ABRE EL MODAL DE TICKET) -->
+                        <!-- BOTÓN UNIFICADO DE FACTURACIÓN -->
                         <button onclick="processPOSSale(true)" class="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-black shadow-lg text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
                             <i class="fa-solid fa-cash-register text-lg"></i> Facturar y Ver Ticket
                         </button>
@@ -1428,7 +1428,7 @@
         function initApp() {
             checkSession();
             
-            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL
+            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL (MESAS)
             restauranteRef.onSnapshot((doc) => {
                 if (doc.exists) {
                     mesas = doc.data().mesas || [];
@@ -1438,6 +1438,20 @@
                 }
             }, (error) => {
                 showToast("Desconectado de la Nube", "error");
+            });
+
+            // 📡 INYECCIÓN QUIRÚRGICA: ESCUCHADOR DE PEDIDOS WEB EN TIEMPO REAL
+            db.collection('pedidos_web').where('status', '==', 'Pendiente').onSnapshot((snapshot) => {
+                let cloudOrders = [];
+                snapshot.forEach(doc => {
+                    let d = doc.data();
+                    if (d) cloudOrders.push(d);
+                });
+                pendingWebOrders = cloudOrders;
+                localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
+                renderWebOrdersPOS();
+            }, (error) => {
+                console.warn("Error sincronizando pedidos web de la nube:", error);
             });
             
             loadDataFromCloud();
@@ -2035,6 +2049,8 @@
 
         function confirmWebOrder(idx) {
             let order = pendingWebOrders[idx];
+            if(!order) return;
+
             let itemsToKitchen = order.items.map(i => ({
                 id: i.id, name: i.name, price: i.price, quantity: i.quantity, status: 'Pendiente', note: order.comment || ''
             }));
@@ -2050,6 +2066,12 @@
                 waiter: 'App Cliente'
             };
             mesas.push(newMesa);
+
+            // Actualización de estado en Firebase para sincronización Nube
+            try {
+                db.collection('pedidos_web').doc(order.id).update({ status: 'Aprobado' }).catch(e => console.error(e));
+            } catch(e) { console.warn(e); }
+
             pendingWebOrders.splice(idx, 1);
             saveState();
             renderWebOrdersPOS(); renderBillingTables();
@@ -2057,8 +2079,14 @@
         }
 
         async function rejectWebOrder(idx) {
+            let order = pendingWebOrders[idx];
             const confirmReject = await showCustomConfirm("Rechazar pedido", "¿Estás seguro de rechazar esta orden?");
             if (confirmReject) {
+                if (order && order.id) {
+                    try {
+                        db.collection('pedidos_web').doc(order.id).update({ status: 'Rechazado' }).catch(e => console.error(e));
+                    } catch(e) { console.warn(e); }
+                }
                 pendingWebOrders.splice(idx, 1);
                 saveState(); renderWebOrdersPOS();
                 showToast("Orden rechazada.", "info");
@@ -2321,7 +2349,7 @@
                 });
             }
 
-            // NUEVO: En vez de imprimir directo, abre la previsualización digital del ticket en pantalla
+            // En vez de imprimir directo, abre la previsualización digital del ticket en pantalla
             if (imprimir) {
                 generateAndPrintThermalTicket(newOrder);
             }
