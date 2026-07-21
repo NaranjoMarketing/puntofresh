@@ -465,7 +465,7 @@
                 </div>
             </div>
 
-            <!-- PANEL DE ENTRADAS Y SALIDAS AUXILIARES DE DINERO -->
+            <!-- NUEVO: PANEL DE ENTRADAS Y SALIDAS AUXILIARES DE DINERO -->
             <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                 <div class="md:col-span-1">
                     <h3 class="font-serif text-sm font-black text-fresh-purple flex items-center gap-2">
@@ -614,7 +614,7 @@
                             <i class="fa-solid fa-paper-plane"></i> Enviar Pedido a Cocina
                         </button>
 
-                        <!-- BOTÓN UNIFICADO DE FACTURACIÓN -->
+                        <!-- BOTÓN UNIFICADO DE FACTURACIÓN (ABRE EL MODAL DE TICKET) -->
                         <button onclick="processPOSSale(true)" class="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-black shadow-lg text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
                             <i class="fa-solid fa-cash-register text-lg"></i> Facturar y Ver Ticket
                         </button>
@@ -1440,19 +1440,50 @@
                 showToast("Desconectado de la Nube", "error");
             });
 
-            // 📡 INYECCIÓN QUIRÚRGICA: ESCUCHADOR DE PEDIDOS WEB EN TIEMPO REAL
-            db.collection('pedidos_web').where('status', '==', 'Pendiente').onSnapshot((snapshot) => {
+            // 📡 ESCUCHADOR EN TIEMPO REAL DIRECTO A LA COLECCIÓN DE PEDIDOS WEB
+            db.collection('pedidos_web').onSnapshot((snapshot) => {
                 let cloudOrders = [];
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    if (d) cloudOrders.push(d);
+                    if (d && d.status === 'Pendiente') {
+                        cloudOrders.push(d);
+                    }
                 });
-                pendingWebOrders = cloudOrders;
+
+                let localPending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
+                let mergedMap = new Map();
+
+                cloudOrders.forEach(o => mergedMap.set(o.id, o));
+                localPending.forEach(o => {
+                    if (!mergedMap.has(o.id) && o.status === 'Pendiente') {
+                        mergedMap.set(o.id, o);
+                    }
+                });
+
+                pendingWebOrders = Array.from(mergedMap.values());
                 localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
                 renderWebOrdersPOS();
             }, (error) => {
                 console.warn("Error sincronizando pedidos web de la nube:", error);
             });
+
+            // 📻 CANAL LOCAL EN TIEMPO REAL (BroadcastChannel para respuesta inmediata en la misma red/navegador)
+            try {
+                const ordersChannel = new BroadcastChannel('pf_orders_channel');
+                ordersChannel.onmessage = function(e) {
+                    if (e.data && (e.data.type === 'NEW_WEB_ORDER' || e.data.order)) {
+                        const newOrd = e.data.order || e.data;
+                        if (newOrd && !pendingWebOrders.some(o => o.id === newOrd.id)) {
+                            pendingWebOrders.unshift(newOrd);
+                            localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
+                            renderWebOrdersPOS();
+                            showToast("🔔 ¡Nuevo pedido digital de " + (newOrd.clientName || 'Cliente') + "!", "success");
+                        }
+                    }
+                };
+            } catch(err) {
+                console.warn("BroadcastChannel no disponible en el navegador:", err);
+            }
             
             loadDataFromCloud();
         }
