@@ -10,7 +10,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <!-- SDK de Firebase para sincronización en la nube -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
@@ -65,13 +64,13 @@
         <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Punto Fresh Logo" class="h-16 md:h-20 w-auto object-contain drop-shadow-lg" onerror="this.onerror=null;this.src='https://placehold.co/180x60/2E062B/white?text=Punto+Fresh';">
     </header>
 
-    <!-- BANDA LILA DE ANUNCIOS -->
     <div id="lila-announcement-band" class="bg-fresh-lightPurple text-fresh-purple font-extrabold py-3 px-4 text-center text-xs md:text-sm shadow-sm border-b border-fresh-pink/20 transition-all flex items-center justify-center gap-2">
         <i class="fa-solid fa-ice-cream animate-bounce"></i>
         <span id="announcement-text-display">Cargando novedades...</span>
     </div>
 
     <main class="max-w-5xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-8">
+        
         <section class="bg-fresh-purple text-white rounded-3xl overflow-hidden shadow-xl border border-white/10 relative">
             <div class="grid grid-cols-1 md:grid-cols-12">
                 <div class="md:col-span-7 p-6 md:p-8 flex flex-col justify-center space-y-4 text-left">
@@ -870,7 +869,7 @@
             }
         }
 
-        function submitClientOrder() {
+        async function submitClientOrder() {
             if (cart.length === 0) {
                 showToast("Tu carrito se encuentra vacío.", "error");
                 return;
@@ -924,18 +923,21 @@
                 status: 'Pendiente'
             };
 
-            // --- ENVÍO EN TIEMPO REAL A FIREBASE (Nube) ---
+            // --- INYECCIÓN QUIRÚRGICA: ESPERAR A FIREBASE ANTES DE CONTINUAR ---
             try {
-                db.collection('pedidos_web').doc(orderId).set(newWebOrder).catch(e => console.error("Error Firebase:", e));
+                await db.collection('pedidos_web').doc(orderId).set(newWebOrder);
+                console.log("✅ Pedido enviado a Firebase exitosamente.");
             } catch(e) {
-                console.warn("Error con Firebase", e);
+                console.error("❌ Error enviando a Firebase:", e);
+                showToast("Hubo un ligero retraso de red, pero el pedido se enviará vía WhatsApp.", "info");
             }
+            // -------------------------------------------------------------------
 
-            // --- TRANSMISIÓN LOCAL INSTANTÁNEA ---
             let pending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
             pending.push(newWebOrder);
             localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pending));
 
+            // CANAL DE TRANSMISIÓN EN TIEMPO REAL LOCAL (BroadcastChannel)
             try {
                 const bc = new BroadcastChannel('pf_orders_channel');
                 bc.postMessage({ type: 'NEW_WEB_ORDER', order: newWebOrder });
