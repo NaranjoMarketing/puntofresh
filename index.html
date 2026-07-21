@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <!-- Firebase SDK (Inyección Quirúrgica) -->
+    <!-- SDK de Firebase para sincronización en la nube -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
@@ -59,26 +59,21 @@
 </head>
 <body class="text-fresh-dark min-h-screen flex flex-col pb-20" onload="initApp()">
 
-    <!-- CONTENEDOR DE TOASTS -->
     <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[150] flex flex-col gap-2 pointer-events-none w-[90%] max-w-md text-center"></div>
 
-    <!-- LOGO SIEMPRE ARRIBA (NO SE TOCA) -->
     <header class="bg-fresh-purple py-4 flex justify-center items-center shadow-md shrink-0 border-b border-fresh-pink/10">
         <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Punto Fresh Logo" class="h-16 md:h-20 w-auto object-contain drop-shadow-lg" onerror="this.onerror=null;this.src='https://placehold.co/180x60/2E062B/white?text=Punto+Fresh';">
     </header>
 
-    <!-- BANDA LILA CON LETRA PÚRPURA (MODIFICABLE DESDE EL POS) -->
+    <!-- BANDA LILA DE ANUNCIOS -->
     <div id="lila-announcement-band" class="bg-fresh-lightPurple text-fresh-purple font-extrabold py-3 px-4 text-center text-xs md:text-sm shadow-sm border-b border-fresh-pink/20 transition-all flex items-center justify-center gap-2">
         <i class="fa-solid fa-ice-cream animate-bounce"></i>
         <span id="announcement-text-display">Cargando novedades...</span>
     </div>
 
-    <!-- MAIN CONTENT -->
     <main class="max-w-5xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-8">
-        <!-- BANNER RESTAURADO (RELAJADO DEBAJO DE LA BANDA) -->
         <section class="bg-fresh-purple text-white rounded-3xl overflow-hidden shadow-xl border border-white/10 relative">
             <div class="grid grid-cols-1 md:grid-cols-12">
-                <!-- Columna Izquierda: Contenido e información -->
                 <div class="md:col-span-7 p-6 md:p-8 flex flex-col justify-center space-y-4 text-left">
                     <span class="inline-flex items-center gap-1.5 self-start px-3 py-1.5 rounded-full text-[10px] md:text-xs font-extrabold bg-white/10 text-fresh-pink border border-white/15 uppercase tracking-wide">
                         🍦 Helado Soft Artesanal de Autor
@@ -92,7 +87,6 @@
                         Disfruta de nuestros espectaculares helados soft creados con ingredientes de la más alta calidad, granizados naturales, fresas locas y exquisitas sodas frutales en Inírida.
                     </p>
                     
-                    <!-- Fila de Horarios y Sucursales -->
                     <div class="flex flex-wrap gap-2 pt-2">
                         <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-bold bg-fresh-pink text-fresh-purple shadow-sm">
                             <i class="fa-solid fa-clock"></i> Todos los días: 2pm - 9pm
@@ -108,55 +102,42 @@
                     </div>
                 </div>
                 
-                <!-- Columna Derecha: Contenedor con Fusión de Degradados Líquidos (Evita el parche) -->
                 <div class="md:col-span-5 relative min-h-[220px] md:min-h-[300px] overflow-hidden bg-fresh-dark">
-                    <!-- Imagen Promocional 1:1 -->
                     <img id="banner-img-display" src="https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png" alt="Toppings" class="w-full h-full object-cover transition-transform duration-700 hover:scale-105" onerror="this.onerror=null;this.src='https://placehold.co/400x400/2E062B/white?text=Punto+Fresh';">
-                    
-                    <!-- Degradado de fusión para computadoras (Izquierda a Derecha) -->
                     <div class="absolute inset-0 bg-gradient-to-r from-fresh-purple via-fresh-purple/40 to-transparent pointer-events-none hidden md:block w-[35%]"></div>
-                    <!-- Degradado de fusión para móviles (Abajo hacia Arriba) -->
                     <div class="absolute inset-0 bg-gradient-to-t from-fresh-purple via-fresh-purple/40 to-transparent pointer-events-none block md:hidden h-[35%] top-auto"></div>
                 </div>
             </div>
         </section>
 
-        <!-- BUSCADOR -->
         <div class="relative w-full max-w-lg mx-auto">
             <input type="text" id="search-input" oninput="filterProducts()" placeholder="¿Qué se te antoja hoy? Buscar helado..." class="w-full bg-white border border-fresh-pink/30 py-3.5 pl-12 pr-4 rounded-2xl text-sm font-semibold outline-none shadow-sm focus:ring-2 focus:ring-fresh-purple/20 focus:border-fresh-purple transition-all placeholder:text-neutral-400">
             <i class="fa-solid fa-magnifying-glass absolute left-4.5 top-1/2 -translate-y-1/2 text-fresh-purple/60 text-base"></i>
         </div>
 
-        <!-- SECCIÓN DE TEMPORADA / ESPECIAL (Con marco y flechas deslizables) -->
         <section id="special-showcase" class="hidden">
             <div class="flex items-center gap-2.5 mb-4">
                 <span class="text-xl">⭐</span>
                 <h2 class="font-serif text-lg md:text-xl font-bold text-fresh-purple uppercase tracking-wide">Especiales de Temporada</h2>
             </div>
             
-            <!-- Marco decorativo premium para los especiales -->
             <div class="relative bg-white border-2 border-dashed border-fresh-gold/60 rounded-3xl p-4 md:p-6 shadow-md">
-                <!-- Flecha de Desplazamiento Izquierda -->
                 <button onclick="scrollSpecials('left')" class="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-fresh-purple text-white w-9 h-9 rounded-full shadow-lg hover:bg-fresh-dark flex items-center justify-center active:scale-90 transition">
                     <i class="fa-solid fa-chevron-left text-sm"></i>
                 </button>
                 
-                <!-- Contenedor Desplazable -->
                 <div id="specials-slider" class="flex gap-4 overflow-x-auto pb-2 scroll-smooth no-scrollbar select-none"></div>
                 
-                <!-- Flecha de Desplazamiento Derecha -->
                 <button onclick="scrollSpecials('right')" class="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-fresh-purple text-white w-9 h-9 rounded-full shadow-lg hover:bg-fresh-dark flex items-center justify-center active:scale-90 transition">
                     <i class="fa-solid fa-chevron-right text-sm"></i>
                 </button>
             </div>
         </section>
 
-        <!-- FILTROS DE CATEGORÍA DESLIZABLES -->
         <section class="sticky top-0 bg-fresh-cream/90 backdrop-blur-md py-3 z-30 -mx-4 px-4 border-b border-fresh-pink/10">
             <div class="flex gap-2 overflow-x-auto no-scrollbar" id="category-pills-container"></div>
         </section>
 
-        <!-- GRID DE PRODUCTOS -->
         <section class="flex-grow">
             <div id="menu-grid" class="grid grid-cols-3 gap-2 md:gap-5"></div>
             <div id="empty-state" class="hidden text-center py-12 text-neutral-400">
@@ -166,22 +147,17 @@
         </section>
     </main>
 
-    <!-- FOOTER CLIENTES -->
     <footer class="bg-fresh-purple text-fresh-lightPurple py-8 border-t-4 border-fresh-pink shrink-0">
         <div class="max-w-5xl mx-auto px-4 flex flex-col items-center gap-5 text-center">
-            
-            <!-- Botón Cápsula del Directorio Inírida Comercial -->
             <a href="https://iniridacomercial.vercel.app/" target="_blank" class="inline-flex items-center gap-2 bg-[#F29400] hover:bg-[#E08600] text-fresh-purple font-extrabold px-7 py-3 rounded-full shadow-lg transition duration-300 text-xs md:text-sm uppercase tracking-wider transform hover:scale-105 active:scale-95">
                 <i class="fa-solid fa-map-location-dot text-sm"></i>
                 <span>Ver en el Directorio Inírida Comercial</span>
             </a>
 
-            <!-- Copyright Oficial -->
             <p class="text-xs md:text-sm text-fresh-cream/95 font-medium tracking-wide mt-2">
                 © 2026 PUNTO FRESH. "Refresca y endulza tu vida" - Helado Soft Artesanal.
             </p>
 
-            <!-- Atribución de Desarrollador JrNaranjo -->
             <p class="text-[10px] md:text-xs text-neutral-400 font-light tracking-wide">
                 Plataforma desarrollada por <span class="font-bold text-white">JrNaranjo</span> | 
                 <a href="https://wa.me/573102881717" target="_blank" class="hover:text-fresh-pink transition duration-200 inline-flex items-center gap-1 font-semibold">
@@ -191,7 +167,6 @@
         </div>
     </footer>
 
-    <!-- BOTÓN FLOTANTE CARRITO (MÓVIL) -->
     <button onclick="toggleCartDrawer(true)" id="mobile-cart-btn" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40 bg-fresh-purple hover:bg-fresh-dark text-white p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 transform active:scale-95 transition-all border border-fresh-pink/20 scale-0">
         <div class="relative">
             <i class="fa-solid fa-cart-shopping text-lg"></i>
@@ -200,11 +175,9 @@
         <span class="font-bold text-xs pr-1 hidden sm:inline" id="cart-mobile-total">$0</span>
     </button>
 
-    <!-- DRAWER / PANEL COMPLEMENTARIO DE CARRITO -->
     <div id="cart-drawer-overlay" class="fixed inset-0 bg-fresh-purple/75 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300" onclick="toggleCartDrawer(false)">
         <div class="fixed right-0 top-0 bottom-0 max-w-md w-[88%] bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col" onclick="event.stopPropagation()" id="cart-drawer-panel">
             
-            <!-- Cabecera -->
             <div class="p-4 border-b border-fresh-pink/10 bg-fresh-lightPurple/50 flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-ice-cream text-fresh-purple"></i>
@@ -213,16 +186,11 @@
                 <button onclick="toggleCartDrawer(false)" class="text-neutral-500 hover:text-fresh-purple p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
 
-            <!-- Listado de Artículos -->
-            <div id="cart-drawer-items" class="flex-grow overflow-y-auto p-4 space-y-3">
-                <!-- Se inyecta dinámicamente -->
-            </div>
+            <div id="cart-drawer-items" class="flex-grow overflow-y-auto p-4 space-y-3"></div>
 
-            <!-- Formulario y Despacho -->
             <div class="p-4 bg-neutral-50 border-t border-fresh-pink/10 text-xs space-y-3">
                 <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px]">Información de Despacho</p>
                 
-                <!-- Tipo de Servicio -->
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="setDeliveryType('Llevar')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
                         <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Llevar / Recoger
@@ -234,10 +202,8 @@
 
                 <div class="space-y-2">
                     <input type="text" id="cust-name" placeholder="Tu nombre *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
-                    
                     <input type="number" id="cust-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-medium text-fresh-purple outline-none focus:border-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                     
-                    <!-- Dirección condicional para Domicilio -->
                     <div id="domicilio-fields" class="hidden space-y-2">
                         <input type="text" id="cust-address" placeholder="Dirección completa del domicilio *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                         <input type="text" id="cust-address-obs" placeholder="Observaciones para llegar a la dirección * (ej. Casa verde)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
@@ -246,7 +212,6 @@
                     <input type="text" id="cust-comment" placeholder="¿Alguna instrucción? (Sin mani, extra salsa...)" class="w-full bg-white border border-fresh-pink/10 py-2 px-3 rounded-lg text-neutral-600 outline-none">
                 </div>
 
-                <!-- Método de Pago del Cliente -->
                 <div>
                     <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px] mb-1.5">Método de Pago</p>
                     <div class="grid grid-cols-3 gap-2">
@@ -256,26 +221,22 @@
                     </div>
                 </div>
 
-                <!-- Campo condicional para pago en Efectivo (Con cuánto va a pagar) -->
                 <div id="cash-change-field" class="hidden">
                     <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">¿Con cuánto billete vas a cancelar? *</label>
                     <input type="text" id="cust-cash-bill" placeholder="Ej: Pago con billete de $50.000" class="w-full bg-white border border-fresh-pink/20 py-2 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                 </div>
             </div>
 
-            <!-- Footer del Drawer (Totales y Acción) -->
             <div class="p-4 border-t border-fresh-pink/10 space-y-3 bg-white shrink-0">
                 <div class="space-y-1">
                     <div class="flex justify-between text-xs text-neutral-500">
                         <span>Subtotal:</span>
                         <span id="drawer-subtotal">$0</span>
                     </div>
-                    <!-- Fila de Costo de Envío Domicilio -->
                     <div id="drawer-delivery-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Costo Envío:</span>
                         <span>$2.000</span>
                     </div>
-                    <!-- Fila de Costo de Empaque Domicilio -->
                     <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Empaques ($2.000 c/u):</span>
                         <span id="drawer-packaging-cost">$0</span>
@@ -292,7 +253,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE TOPPINGS -->
     <div id="toppings-modal" class="fixed inset-0 z-[200] bg-fresh-purple/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="toppings-box">
             <div class="flex items-center gap-2 mb-1">
@@ -301,9 +261,7 @@
             </div>
             <p id="toppings-subtitle" class="text-xs text-neutral-500 mb-4 font-bold">Puedes elegir hasta <span id="toppings-max-count" class="text-fresh-purple text-sm font-black"></span> opciones.</p>
 
-            <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="toppings-list">
-                <!-- Los checkboxes de los toppings se inyectan aquí dinámicamente -->
-            </div>
+            <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="toppings-list"></div>
 
             <div class="flex gap-3 justify-end shrink-0 pt-4 border-t border-fresh-pink/10">
                 <button onclick="closeToppingsModal()" class="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition-all shadow-sm">Cancelar</button>
@@ -312,7 +270,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE TOPPINGS EXTRA -->
     <div id="extra-toppings-modal" class="fixed inset-0 z-[210] bg-fresh-purple/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="extra-toppings-box">
             <div class="flex items-center gap-2 mb-1">
@@ -321,9 +278,7 @@
             </div>
             <p class="text-xs text-neutral-500 mb-4 font-bold">Cada adición extra tiene un valor de <span class="text-emerald-600 text-sm font-black">$4.000</span> c/u.</p>
 
-            <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="extra-toppings-list">
-                <!-- Se inyectan dinámicamente -->
-            </div>
+            <div class="flex-grow overflow-y-auto pr-2 space-y-2 mb-4 no-scrollbar" id="extra-toppings-list"></div>
 
             <div class="flex gap-3 justify-end shrink-0 pt-4 border-t border-fresh-pink/10">
                 <button onclick="skipExtraToppings()" class="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition-all shadow-sm">No, gracias</button>
@@ -332,9 +287,7 @@
         </div>
     </div>
 
-    <!-- SCRIPT DE NEGOCIO -->
     <script>
-        // --- INICIALIZACIÓN DE FIREBASE (Inyección Quirúrgica) ---
         const firebaseConfig = {
             apiKey: "AIzaSyBF553ngCo26v31YghnXzRBwETzxeXAhVk",
             authDomain: "punto-fresh-inirida.firebaseapp.com",
@@ -345,7 +298,6 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        // -----------------------------------------------------------
 
         const DB_PREFIX = "PUNTOFRESH_V1_";
         const URL_API = 'https://script.google.com/macros/s/AKfycbyEMUFe0c-Nelpo_Q7OShxYwzodE_Pd1NAJDoblCKr-RJDkyGU2208deURVIFSMgk3x/exec';
@@ -972,17 +924,24 @@
                 status: 'Pendiente'
             };
 
-            // --- INYECCIÓN QUIRÚRGICA FIREBASE ---
+            // --- ENVÍO EN TIEMPO REAL A FIREBASE (Nube) ---
             try {
                 db.collection('pedidos_web').doc(orderId).set(newWebOrder).catch(e => console.error("Error Firebase:", e));
             } catch(e) {
                 console.warn("Error con Firebase", e);
             }
-            // -------------------------------------
 
+            // --- TRANSMISIÓN LOCAL INSTANTÁNEA ---
             let pending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
             pending.push(newWebOrder);
             localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pending));
+
+            try {
+                const bc = new BroadcastChannel('pf_orders_channel');
+                bc.postMessage({ type: 'NEW_WEB_ORDER', order: newWebOrder });
+                bc.close();
+            } catch(err) {}
+
             window.dispatchEvent(new Event('storage'));
 
             const waMessage = buildWhatsAppMessage(newWebOrder, rawSubtotal, deliveryFee, packagingFee, finalTotal, addressObs, cashBill);
