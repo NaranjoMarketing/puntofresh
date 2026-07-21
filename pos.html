@@ -1440,7 +1440,7 @@
                 showToast("Desconectado de la Nube", "error");
             });
 
-            // 📡 ESCUCHADOR EN TIEMPO REAL DIRECTO A LA COLECCIÓN DE PEDIDOS WEB
+            // 📡 ESCUCHADOR EN TIEMPO REAL DIRECTO A LA COLECCIÓN DE PEDIDOS WEB (SIN FILTRO RESTRINGIDO DE ÍNDICE)
             db.collection('pedidos_web').onSnapshot((snapshot) => {
                 let cloudOrders = [];
                 snapshot.forEach(doc => {
@@ -1467,7 +1467,7 @@
                 console.warn("Error sincronizando pedidos web de la nube:", error);
             });
 
-            // 📻 CANAL LOCAL EN TIEMPO REAL (BroadcastChannel para respuesta inmediata en la misma red/navegador)
+            // 📻 CANAL LOCAL EN TIEMPO REAL (BroadcastChannel de respuesta inmediata)
             try {
                 const ordersChannel = new BroadcastChannel('pf_orders_channel');
                 ordersChannel.onmessage = function(e) {
@@ -1477,13 +1477,11 @@
                             pendingWebOrders.unshift(newOrd);
                             localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
                             renderWebOrdersPOS();
-                            showToast("🔔 ¡Nuevo pedido digital de " + (newOrd.clientName || 'Cliente') + "!", "success");
+                            showToast("🔔 ¡Nuevo pedido de " + (newOrd.clientName || 'Cliente') + "!", "success");
                         }
                     }
                 };
-            } catch(err) {
-                console.warn("BroadcastChannel no disponible en el navegador:", err);
-            }
+            } catch(err) {}
             
             loadDataFromCloud();
         }
