@@ -10,8 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     
     <script>
         tailwind.config = {
@@ -245,8 +245,8 @@
                         <span id="drawer-total">$0</span>
                     </div>
                 </div>
-                <button onclick="submitClientOrder()" class="w-full bg-fresh-purple hover:bg-fresh-dark text-white font-bold py-3.5 rounded-2xl text-xs shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-paper-plane text-fresh-pink"></i> Enviar Pedido a Caja
+                <button id="submit-order-btn" onclick="submitClientOrder()" class="w-full bg-fresh-purple hover:bg-fresh-dark text-white font-bold py-3.5 rounded-2xl text-xs shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane text-fresh-pink"></i> <span>Enviar Pedido a Caja</span>
                 </button>
             </div>
         </div>
@@ -901,6 +901,11 @@
                 return;
             }
 
+            const btn = document.getElementById('submit-order-btn');
+            const originalBtnText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Enviando a Caja...`;
+
             const rawSubtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
             const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
 
@@ -923,21 +928,20 @@
                 status: 'Pendiente'
             };
 
-            // --- INYECCIÓN QUIRÚRGICA: ESPERAR A FIREBASE ANTES DE CONTINUAR ---
+            // --- ENVÍO GARANTIZADO Y COMPLETO A FIREBASE ANTES DE REDIRIGIR ---
+            let firebaseSaved = false;
             try {
                 await db.collection('pedidos_web').doc(orderId).set(newWebOrder);
-                console.log("✅ Pedido enviado a Firebase exitosamente.");
+                console.log("✅ Pedido guardado en la nube con éxito.");
+                firebaseSaved = true;
             } catch(e) {
-                console.error("❌ Error enviando a Firebase:", e);
-                showToast("Hubo un ligero retraso de red, pero el pedido se enviará vía WhatsApp.", "info");
+                console.error("❌ Error guardando en la Nube:", e);
             }
-            // -------------------------------------------------------------------
 
             let pending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
             pending.push(newWebOrder);
             localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pending));
 
-            // CANAL DE TRANSMISIÓN EN TIEMPO REAL LOCAL (BroadcastChannel)
             try {
                 const bc = new BroadcastChannel('pf_orders_channel');
                 bc.postMessage({ type: 'NEW_WEB_ORDER', order: newWebOrder });
@@ -960,10 +964,19 @@
             document.getElementById('cust-comment').value = '';
             document.getElementById('cust-cash-bill').value = '';
 
-            showToast("¡Pedido enviado a la caja con éxito!", "success");
+            btn.disabled = false;
+            btn.innerHTML = originalBtnText;
+
+            if (firebaseSaved) {
+                showToast("¡Pedido recibido en caja con éxito!", "success");
+            } else {
+                showToast("Pedido guardado localmente. Redirigiendo a WhatsApp...", "info");
+            }
+
+            // Cambiar de ubicación directamente para abrir WhatsApp sin bloquear la red
             setTimeout(() => {
-                window.open(waUrl, '_blank');
-            }, 1000);
+                window.location.href = waUrl;
+            }, 600);
         }
 
         function buildWhatsAppMessage(order, subtotal, delivery, empaque, total, obs, cashBill) {
