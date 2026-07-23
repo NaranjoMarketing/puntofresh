@@ -465,7 +465,7 @@
                 </div>
             </div>
 
-            <!-- PANEL DE ENTRADAS Y SALIDAS AUXILIARES DE DINERO -->
+            <!-- NUEVO: PANEL DE ENTRADAS Y SALIDAS AUXILIARES DE DINERO -->
             <div class="bg-white p-5 rounded-2xl border border-fresh-pink/10 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                 <div class="md:col-span-1">
                     <h3 class="font-serif text-sm font-black text-fresh-purple flex items-center gap-2">
@@ -537,6 +537,11 @@
                             <select id="pos-table-select" onchange="applyPOSTableSelect()" class="w-full bg-white border border-fresh-pink/30 py-2 px-3 rounded-lg text-xs font-bold text-fresh-purple focus:ring-1 focus:ring-fresh-purple outline-none mb-1">
                                 <option value="">-- Sin Mesa / Venta Rápida --</option>
                             </select>
+
+                            <div class="bg-fresh-lightPurple/50 p-2 rounded-lg border border-fresh-pink/20 flex items-center gap-2 mb-2 mt-1">
+                                <input type="checkbox" id="pos-is-takeaway" onchange="updatePOSCartUI()" class="w-4 h-4 text-fresh-purple rounded focus:ring-fresh-purple">
+                                <label for="pos-is-takeaway" class="text-xs font-bold text-fresh-purple cursor-pointer select-none">Pedido Para Llevar (+$2.000 por empaque)</label>
+                            </div>
 
                             <label class="text-[10px] uppercase font-bold text-neutral-500">Datos del Cliente</label>
                             <select id="pos-client-select" onchange="applyPOSClientData()" class="w-full bg-white border border-fresh-pink/30 py-2 px-3 rounded-lg text-xs font-bold text-fresh-purple focus:ring-1 focus:ring-fresh-purple outline-none">
@@ -614,7 +619,7 @@
                             <i class="fa-solid fa-paper-plane"></i> Enviar Pedido a Cocina
                         </button>
 
-                        <!-- BOTÓN UNIFICADO DE FACTURACIÓN -->
+                        <!-- BOTÓN UNIFICADO DE FACTURACIÓN (ABRE EL MODAL DE TICKET) -->
                         <button onclick="processPOSSale(true)" class="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-black shadow-lg text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
                             <i class="fa-solid fa-cash-register text-lg"></i> Facturar y Ver Ticket
                         </button>
@@ -730,16 +735,19 @@
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block font-bold mb-1 text-fresh-purple">Categoría</label>
-                                <select id="inv-category" class="w-full bg-neutral-50 border border-fresh-pink/30 px-3 py-2 rounded-xl font-bold">
-                                    <option value="Nativos y Saludables">Nativos y Saludables</option>
-                                    <option value="Granizados">Granizados</option>
-                                    <option value="Kids">Kids</option>
-                                    <option value="Gelato">Gelato</option>
-                                    <option value="Malteadas">Malteadas</option>
-                                    <option value="Fresas Locas">Fresas Locas</option>
-                                    <option value="Micheladas y Sodas">Micheladas y Sodas</option>
-                                    <option value="Café Juan Valdez">Café Juan Valdez</option>
-                                </select>
+                                <div class="flex gap-2">
+                                    <select id="inv-category" class="w-full bg-neutral-50 border border-fresh-pink/30 px-3 py-2 rounded-xl font-bold">
+                                        <option value="Nativos y Saludables">Nativos y Saludables</option>
+                                        <option value="Granizados">Granizados</option>
+                                        <option value="Kids">Kids</option>
+                                        <option value="Gelato">Gelato</option>
+                                        <option value="Malteadas">Malteadas</option>
+                                        <option value="Fresas Locas">Fresas Locas</option>
+                                        <option value="Micheladas y Sodas">Micheladas y Sodas</option>
+                                        <option value="Café Juan Valdez">Café Juan Valdez</option>
+                                    </select>
+                                    <button type="button" onclick="promptNewCategory()" class="bg-fresh-lightPurple border border-fresh-pink/30 px-3 rounded-xl text-fresh-purple hover:bg-fresh-purple hover:text-white transition" title="Añadir nueva categoría"><i class="fa-solid fa-plus"></i></button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block font-bold mb-1">Porción / Envase</label>
@@ -948,7 +956,7 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-bold uppercase mb-1.5 text-neutral-500">PIN de Seguridad (4 dígitos)</label>
-                                <input type="password" id="settings-admin-pin" placeholder="0000" maxlength="4" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-black tracking-widest outline-none text-xs text-fresh-purple focus:ring-1 focus:ring-fresh-purple">
+                                <input type="password" id="settings-admin-pin" placeholder="0000" maxlength="4" class="w-full bg-neutral-50 border border-neutral-200 px-4 py-3 rounded-xl font-bold tracking-widest outline-none text-xs text-fresh-purple focus:ring-1 focus:ring-fresh-purple">
                                 <p class="text-[10px] text-neutral-400 mt-1">Este PIN bloquea Arqueos, Ajustes, Cierres and Anulaciones de facturas.</p>
                             </div>
                         </div>
@@ -1439,19 +1447,48 @@
                 showToast("Desconectado de la Nube", "error");
             });
 
-            // 📡 INYECCIÓN QUIRÚRGICA: ESCUCHADOR DE PEDIDOS WEB EN TIEMPO REAL
-            db.collection('pedidos_web').where('status', '==', 'Pendiente').onSnapshot((snapshot) => {
+            // 📡 ESCUCHADOR EN TIEMPO REAL DIRECTO A LA COLECCIÓN DE PEDIDOS WEB (SIN FILTRO RESTRINGIDO DE ÍNDICE)
+            db.collection('pedidos_web').onSnapshot((snapshot) => {
                 let cloudOrders = [];
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    if (d) cloudOrders.push(d);
+                    if (d && d.status === 'Pendiente') {
+                        cloudOrders.push(d);
+                    }
                 });
-                pendingWebOrders = cloudOrders;
+
+                let localPending = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
+                let mergedMap = new Map();
+
+                cloudOrders.forEach(o => mergedMap.set(o.id, o));
+                localPending.forEach(o => {
+                    if (!mergedMap.has(o.id) && o.status === 'Pendiente') {
+                        mergedMap.set(o.id, o);
+                    }
+                });
+
+                pendingWebOrders = Array.from(mergedMap.values());
                 localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
                 renderWebOrdersPOS();
             }, (error) => {
                 console.warn("Error sincronizando pedidos web de la nube:", error);
             });
+
+            // 📻 CANAL LOCAL EN TIEMPO REAL (BroadcastChannel de respuesta inmediata)
+            try {
+                const ordersChannel = new BroadcastChannel('pf_orders_channel');
+                ordersChannel.onmessage = function(e) {
+                    if (e.data && (e.data.type === 'NEW_WEB_ORDER' || e.data.order)) {
+                        const newOrd = e.data.order || e.data;
+                        if (newOrd && !pendingWebOrders.some(o => o.id === newOrd.id)) {
+                            pendingWebOrders.unshift(newOrd);
+                            localStorage.setItem(DB_PREFIX + 'pendingWebOrders', JSON.stringify(pendingWebOrders));
+                            renderWebOrdersPOS();
+                            showToast("🔔 ¡Nuevo pedido de " + (newOrd.clientName || 'Cliente') + "!", "success");
+                        }
+                    }
+                };
+            } catch(err) {}
             
             loadDataFromCloud();
         }
@@ -1499,7 +1536,10 @@
                 populatePOSTableSelect();
                 updateCashRegisterUI();
             }
-            if(t==='inventory') renderInventory(); 
+            if(t==='inventory') {
+                updateCategorySelect();
+                renderInventory(); 
+            }
             if(t==='expenses') renderExpenses(); 
             if(t==='history') renderHistory(); 
             if(t==='finances') renderFinances();
@@ -2102,13 +2142,20 @@
             }
             billing.forEach(m => {
                 let total = m.items.reduce((s,i) => s + (i.price * i.quantity), 0);
+                
+                // EVALUACIÓN DE ESTADO PARA ALERTA VISUAL "CUENTA"
+                let isCuenta = m.status === 'Cuenta';
+                let bgClass = isCuenta ? 'bg-rose-100 border-rose-400 animate-pulse' : 'bg-neutral-50 border-fresh-pink/10 hover:bg-neutral-100';
+                let titleColor = isCuenta ? 'text-rose-700' : 'text-fresh-purple';
+                let statusText = isCuenta ? ' (Pide Cuenta)' : '';
+                
                 container.innerHTML += `
-                    <button onclick="selectPOSMesa('${m.id}')" class="p-4 rounded-xl border border-fresh-pink/10 text-left bg-neutral-50 hover:bg-neutral-100 flex flex-col justify-between h-24 shadow-sm relative transition duration-200 active:scale-95">
+                    <button onclick="selectPOSMesa('${m.id}')" class="p-4 rounded-xl border text-left flex flex-col justify-between h-24 shadow-sm relative transition duration-200 active:scale-95 ${bgClass}">
                         <div class="w-full">
-                            <span class="text-xs uppercase font-extrabold text-fresh-purple truncate block w-full">${m.label}</span>
-                            <span class="text-[9px] text-neutral-400 block mt-0.5">Mesero: ${m.waiter || 'Caja'}</span>
+                            <span class="text-xs uppercase font-extrabold truncate block w-full ${titleColor}">${m.label}${statusText}</span>
+                            <span class="text-[9px] ${isCuenta ? 'text-rose-500' : 'text-neutral-400'} block mt-0.5">Mesero: ${m.waiter || 'Caja'}</span>
                         </div>
-                        <span class="text-xs font-black text-fresh-purple mt-1 block">$${total.toLocaleString()}</span>
+                        <span class="text-xs font-black ${titleColor} mt-1 block">$${total.toLocaleString()}</span>
                     </button>`;
             });
         }
@@ -2127,6 +2174,12 @@
             m.items.forEach(i => {
                 posCart.push({ id: i.id, name: i.name, price: i.price, quantity: i.quantity });
             });
+            
+            // Si la mesa seleccionada incluye un empaque de llevar y el checkbox existe, lo marcamos
+            if(document.getElementById('pos-is-takeaway')) {
+                document.getElementById('pos-is-takeaway').checked = m.items.some(i => i.id === 'EMP-LLEVAR');
+            }
+            
             updatePOSCartUI();
         }
 
@@ -2156,6 +2209,21 @@
         }
 
         function updatePOSCartUI() {
+            // LÓGICA AUTOMÁTICA OPCIÓN "PARA LLEVAR"
+            let isTakeaway = document.getElementById('pos-is-takeaway') && document.getElementById('pos-is-takeaway').checked;
+            let baseItemsQty = posCart.filter(i => i.id !== 'EMP-LLEVAR').reduce((s,i) => s + i.quantity, 0);
+            let empIdx = posCart.findIndex(i => i.id === 'EMP-LLEVAR');
+            
+            if (isTakeaway && baseItemsQty > 0) {
+                if (empIdx >= 0) {
+                    posCart[empIdx].quantity = baseItemsQty;
+                } else {
+                    posCart.push({ id: 'EMP-LLEVAR', name: '🥡 Empaques Para Llevar', price: 2000, quantity: baseItemsQty });
+                }
+            } else if ((!isTakeaway || baseItemsQty === 0) && empIdx >= 0) {
+                posCart.splice(empIdx, 1);
+            }
+
             const container = document.getElementById('pos-cart-items'); container.innerHTML = '';
             let total = 0;
             if(posCart.length === 0) {
@@ -2197,6 +2265,7 @@
             document.getElementById('pos-mixed-trans').value = '0';
             document.getElementById('pos-mixed-nequi').value = '0';
             document.getElementById('pos-waiter-indicator').innerHTML = `Atiende: <span class="text-fresh-purple font-bold">Caja</span>`;
+            if (document.getElementById('pos-is-takeaway')) document.getElementById('pos-is-takeaway').checked = false;
             updatePOSCartUI();
         }
 
@@ -2470,6 +2539,8 @@
             if(!select) return;
             select.innerHTML = '<option value="">-- Sin Mesa / Venta Rápida --</option>';
             mesas.forEach(m => {
+                if (m.waiter === 'App Cliente') return; // SURGICAL FIX: Hide Web Orders from dropdown
+                
                 let statusLabel = m.status === 'Ocupada' ? ' (Ocupada)' : (m.status === 'Cuenta' ? ' (Pide Cuenta)' : ' (Libre)');
                 select.innerHTML += `<option value="${m.id}">${m.name}${statusLabel}</option>`;
             });
@@ -2495,12 +2566,19 @@
                 showToast("No hay artículos en la comanda para enviar a la cocina.", "error");
                 return;
             }
-            const tableId = document.getElementById('pos-selected-table-id').value || document.getElementById('pos-table-select').value;
+            let tableId = document.getElementById('pos-selected-table-id').value || document.getElementById('pos-table-select').value;
+            let table;
+
             if (!tableId) {
-                showToast("Debes seleccionar una Mesa para enviar el pedido a la cocina.", "error");
-                return;
+                table = mesas.find(m => m.name.toLowerCase().includes('caja') || m.name.toLowerCase().includes('mostrador'));
+                if (!table) {
+                    showToast("Crea una mesa llamada 'Caja' para poder enviar ventas rápidas a cocina.", "error");
+                    return;
+                }
+            } else {
+                table = mesas.find(m => m.id === tableId);
             }
-            const table = mesas.find(m => m.id === tableId);
+
             if (!table) {
                 showToast("Mesa no encontrada.", "error");
                 return;
@@ -2518,7 +2596,7 @@
                         price: cartItem.price,
                         quantity: cartItem.quantity,
                         status: existingItem.status || 'Pendiente',
-                        note: existingItem.note || 'Pedido desde Caja'
+                        note: existingItem.note || 'Venta Rápida / Caja'
                     });
                 } else {
                     updatedItems.push({
@@ -2527,19 +2605,21 @@
                         price: cartItem.price,
                         quantity: cartItem.quantity,
                         status: 'Pendiente',
-                        note: 'Pedido desde Caja'
+                        note: 'Venta Rápida / Caja'
                     });
                 }
             });
 
             table.items = updatedItems;
             table.status = 'Ocupada';
-            table.waiter = 'Caja';
-            table.label = document.getElementById('pos-client-name').value || table.name;
-
+            if (tableId) {
+                table.waiter = 'Caja';
+                table.label = document.getElementById('pos-client-name').value || table.name;
+            }
+            
             saveState();
 
-            showToast(`Pedido de la ${table.name} enviado a cocina con éxito.`, "success");
+            showToast(`Pedido enviado a cocina con éxito.`, "success");
             clearPOSCart();
             renderBillingTables();
             populatePOSTableSelect();
@@ -2627,6 +2707,37 @@
             renderAccountStatement();
         }
 
+        function promptNewCategory() {
+            let cat = prompt("Ingresa el nombre de la nueva categoría:");
+            if (cat && cat.trim() !== "") {
+                cat = cat.trim();
+                let sel = document.getElementById('inv-category');
+                let exists = Array.from(sel.options).some(o => o.value.toLowerCase() === cat.toLowerCase());
+                if (!exists) {
+                    let opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.text = cat;
+                    sel.add(opt);
+                }
+                sel.value = cat;
+            }
+        }
+
+        function updateCategorySelect() {
+            const sel = document.getElementById('inv-category');
+            if(!sel) return;
+            const existingCats = Array.from(sel.options).map(o => o.value.toLowerCase());
+            const allCats = [...new Set(products.map(p => p.category))];
+            allCats.forEach(c => {
+                if(c && !existingCats.includes(c.toLowerCase())) {
+                    let opt = document.createElement('option');
+                    opt.value = c;
+                    opt.text = c;
+                    sel.add(opt);
+                }
+            });
+        }
+
         function saveInventoryProduct() {
             const id = document.getElementById('inv-edit-id').value.trim();
             const name = document.getElementById('inv-name').value.trim();
@@ -2681,6 +2792,7 @@
 
             saveState();
             sincronizarConGoogle("syncProducts", products); 
+            updateCategorySelect();
             renderInventory();
             
             showToast("Catálogo actualizado.", "success");
@@ -3124,6 +3236,7 @@
         }
 
         function initAdminDashboard() {
+            updateCategorySelect();
             renderWebOrdersPOS();
             renderBillingTables();
             renderPOSProducts();
@@ -3141,6 +3254,7 @@
             if (e.key === DB_PREFIX + 'products') {
                 products = JSON.parse(e.newValue || '[]');
                 sanitizeProducts(); 
+                updateCategorySelect();
                 renderInventory();
                 renderPOSProducts();
             }
