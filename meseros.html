@@ -91,7 +91,7 @@
             <img src="https://i.postimg.cc/9FX5bTCz/nuevo-punto-fresh-nativos.png" alt="Logo" class="h-10 w-auto object-contain">
             <div>
                 <h1 class="text-xs font-serif italic text-fresh-pink leading-none">Punto Fresh</h1>
-                <p class="text-[9px] text-fresh-lightPurple flex items-center gap-1"><i class="fa-solid fa-cloud text-emerald-400"></i> Conectado a la Nube</p>
+                <p id="cloud-status-badge" class="text-[9px] text-fresh-lightPurple flex items-center gap-1"><i class="fa-solid fa-cloud text-emerald-400"></i> Conectado a la Nube (Tiempo Real)</p>
             </div>
         </div>
         
@@ -187,7 +187,7 @@
                 <button onclick="clearCurrentMesa()" id="btn-liberar-mesa" class="col-span-2 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5">
                     <i class="fa-solid fa-trash-can"></i> Cancelar / Liberar Mesa
                 </button>
-                <button onclick="deleteCurrentTable()" id="btn-eliminar-mesa" class="col-span-2 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 hidden">
+                <button onclick="deleteCurrentTable()" id="btn-eliminar-mesa" class="col-span-2 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-xl text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5">
                     <i class="fa-solid fa-folder-minus"></i> Eliminar Mesa del Sistema
                 </button>
             </div>
@@ -232,27 +232,17 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const restauranteRef = db.collection('sistema').doc('estado_mesas');
-        
-        // Función para enviar las mesas a internet en lugar de guardarlas localmente
-        async function syncToCloud() {
-            try {
-                await restauranteRef.set({ mesas: mesas }, { merge: true });
-            } catch (error) {
-                console.error("Error conectando a la nube: ", error);
-                showToast("Revisar conexión a internet.", "error");
-            }
-        }
-        // ==========================================
 
         let currentWaiter = localStorage.getItem(DB_PREFIX + 'currentWaiter') || "";
         let products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
-        let mesas = []; // Ahora se carga desde la nube
+        let mesas = []; 
         
         let activeTable = null;
         let waiterCart = []; 
         let activeCategory = "Todos";
         let noteItemIndex = null; 
 
+        // 10 Mesas Iniciales por Defecto
         const DEFAULT_MESAS = [
             { id: "M1", name: "Mesa 1", label: "Mesa 1", status: "Libre", items: [], waiter: "" },
             { id: "M2", name: "Mesa 2", label: "Mesa 2", status: "Libre", items: [], waiter: "" },
@@ -262,9 +252,69 @@
             { id: "M6", name: "Mesa 6", label: "Mesa 6", status: "Libre", items: [], waiter: "" },
             { id: "M7", name: "Mesa 7", label: "Mesa 7", status: "Libre", items: [], waiter: "" },
             { id: "M8", name: "Mesa 8", label: "Mesa 8", status: "Libre", items: [], waiter: "" },
-            { id: "M9", name: "Mesa Auxiliar 1", label: "Mesa Auxiliar 1", status: "Libre", items: [], waiter: "" },
-            { id: "M10", name: "Mesa Auxiliar 2", label: "Mesa Auxiliar 2", status: "Libre", items: [], waiter: "" }
+            { id: "M9", name: "Mesa 9", label: "Mesa 9", status: "Libre", items: [], waiter: "" },
+            { id: "M10", name: "Mesa 10", label: "Mesa 10", status: "Libre", items: [], waiter: "" }
         ];
+
+        // Limpia y elimina mesas duplicadas por ID o Nombre
+        function sanitizeAndDeduplicateMesas(rawList) {
+            if (!Array.isArray(rawList) || rawList.length === 0) {
+                return JSON.parse(JSON.stringify(DEFAULT_MESAS));
+            }
+
+            const seenIds = new Set();
+            const seenNames = new Set();
+            const cleanList = [];
+
+            for (const m of rawList) {
+                if (!m) continue;
+                const id = m.id || ("M" + Math.random().toString(36).substr(2, 5));
+                const name = (m.name || m.label || "Mesa").trim();
+                const nameKey = name.toLowerCase();
+
+                if (seenIds.has(id) || seenNames.has(nameKey)) {
+                    continue; // Omite duplicados
+                }
+
+                seenIds.add(id);
+                seenNames.add(nameKey);
+
+                cleanList.push({
+                    id: id,
+                    name: name,
+                    label: m.label || name,
+                    status: m.status || "Libre",
+                    items: Array.isArray(m.items) ? m.items : [],
+                    waiter: m.waiter || ""
+                });
+            }
+
+            return cleanList.length > 0 ? cleanList : JSON.parse(JSON.stringify(DEFAULT_MESAS));
+        }
+
+        function updateCloudBadge(online) {
+            const badge = document.getElementById('cloud-status-badge');
+            if (!badge) return;
+            if (online) {
+                badge.innerHTML = `<i class="fa-solid fa-cloud text-emerald-400"></i> Conectado a la Nube (Tiempo Real)`;
+                badge.className = "text-[9px] text-emerald-300 flex items-center gap-1";
+            } else {
+                badge.innerHTML = `<i class="fa-solid fa-cloud-showers-heavy text-rose-400 animate-pulse"></i> Reconectando Nube...`;
+                badge.className = "text-[9px] text-rose-300 flex items-center gap-1";
+            }
+        }
+
+        // Sincronización completa con Firebase
+        async function syncToCloud() {
+            try {
+                await restauranteRef.set({ mesas: mesas });
+                updateCloudBadge(true);
+            } catch (error) {
+                console.error("Error conectando a la nube: ", error);
+                updateCloudBadge(false);
+                showToast("Error de conexión a la nube.", "error");
+            }
+        }
 
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
@@ -318,51 +368,75 @@
         function initWaiterApp() {
             products = JSON.parse(localStorage.getItem(DB_PREFIX + 'products')) || [];
             buildWaiterCategoriesMenu();
-            
-            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL
-            restauranteRef.onSnapshot((doc) => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    const newMesas = data.mesas || [];
-                    
-                    // Detectar si la cocina marcó algo como listo
-                    newMesas.forEach(newMesa => {
-                        let oldMesa = mesas.find(m => m.id === newMesa.id);
-                        if (oldMesa) {
-                            let oldPending = oldMesa.items ? oldMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
-                            let newPending = newMesa.items ? newMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
-                            let hasListo = newMesa.items ? newMesa.items.some(i => i.status === 'Listo') : false;
-                            
-                            if (oldPending && !newPending && hasListo) {
-                                showToast(`¡El pedido de ${newMesa.name} está LISTO!`, 'success');
-                                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-                            }
-                        }
-                    });
 
-                    mesas = newMesas;
-                    renderTablesGrid();
-                    
-                    // Actualizar panel si la mesa está abierta
-                    if (activeTable) {
-                        const matched = mesas.find(m => m.id === activeTable.id);
-                        if (matched) {
-                            activeTable = matched;
-                            waiterCart = [];
-                            if (activeTable.items) {
-                                activeTable.items.forEach(i => { waiterCart.push({...i}); });
-                            }
-                            updateComandaUI();
-                        }
-                    }
+            try {
+                firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch(() => {});
+            } catch(e){}
+
+            // 📡 ESCUCHADOR DEL CATÁLOGO DE PRODUCTOS EN TIEMPO REAL
+            db.collection('sistema').doc('catalogo_productos').onSnapshot((doc) => {
+                if (doc.exists && doc.data().products) {
+                    products = doc.data().products;
+                    localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                    buildWaiterCategoriesMenu();
+                    renderWaiterMenu();
+                }
+            }, (err) => console.warn("Sincronización menú:", err));
+            
+            // 📡 ESCUCHADOR DE MESAS EN TIEMPO REAL
+            restauranteRef.onSnapshot((doc) => {
+                updateCloudBadge(true);
+                let cloudMesas = [];
+                
+                if (doc.exists && Array.isArray(doc.data().mesas) && doc.data().mesas.length > 0) {
+                    cloudMesas = doc.data().mesas;
                 } else {
-                    // Si la nube está vacía, iniciamos con las mesas por defecto
-                    mesas = DEFAULT_MESAS;
+                    // Si Firestore está vacío, se inicia con las 10 mesas iniciales
+                    cloudMesas = JSON.parse(JSON.stringify(DEFAULT_MESAS));
                     syncToCloud();
                 }
+
+                // Saneamiento y eliminación de duplicados
+                const cleanMesas = sanitizeAndDeduplicateMesas(cloudMesas);
+
+                // Detectar si la cocina cambió productos a "Listo"
+                cleanMesas.forEach(newMesa => {
+                    let oldMesa = mesas.find(m => m.id === newMesa.id);
+                    if (oldMesa) {
+                        let oldPending = oldMesa.items ? oldMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
+                        let newPending = newMesa.items ? newMesa.items.some(i => i.status === 'Pendiente' || i.status === 'Preparando') : false;
+                        let hasListo = newMesa.items ? newMesa.items.some(i => i.status === 'Listo') : false;
+                        
+                        if (oldPending && !newPending && hasListo) {
+                            showToast(`¡El pedido de ${newMesa.name} está LISTO!`, 'success');
+                            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                        }
+                    }
+                });
+
+                mesas = cleanMesas;
+                renderTablesGrid();
+                
+                // Si la mesa está abierta en pantalla, actualizar items
+                if (activeTable) {
+                    const matched = mesas.find(m => m.id === activeTable.id);
+                    if (matched) {
+                        activeTable = matched;
+                        waiterCart = [];
+                        if (activeTable.items) {
+                            activeTable.items.forEach(i => { waiterCart.push({...i}); });
+                        }
+                        updateComandaUI();
+                    }
+                }
             }, (error) => {
+                console.error("Error escuchando la nube:", error);
+                updateCloudBadge(false);
                 showToast("Desconectado de la Nube", "error");
             });
+
+            window.addEventListener('online', () => updateCloudBadge(true));
+            window.addEventListener('offline', () => updateCloudBadge(false));
         }
 
         function renderTablesGrid() {
@@ -425,7 +499,7 @@
             if (!hasPendingOrPrep && hasListo) {
                 if (confirm(`El pedido de ${activeTable.name} está LISTO. ¿Confirmas que ya fue entregado a la mesa?`)) {
                     activeTable.items.forEach(i => { if(i.status === 'Listo') i.status = 'Entregado'; });
-                    syncToCloud(); // <-- Actualiza la nube
+                    syncToCloud(); 
                     showToast("Pedido entregado en mesa exitosamente.", "success");
                     return; 
                 }
@@ -441,6 +515,7 @@
             document.getElementById('drawer-table-waiter').innerText = `Atendido por: ${activeTable.waiter || currentWaiter}`;
 
             const statusLabel = document.getElementById('drawer-table-status');
+
             if (activeTable.status === 'Ocupada') {
                 statusLabel.innerText = "Ocupada";
                 statusLabel.className = "text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-fresh-purple text-white";
@@ -458,6 +533,7 @@
                 statusLabel.className = "text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white";
                 document.getElementById('btn-liberar-mesa').classList.add('hidden');
                 document.getElementById('btn-pedir-cuenta').classList.add('hidden');
+                // Cualquier mesa libre se puede eliminar si se desea
                 document.getElementById('btn-eliminar-mesa').classList.remove('hidden');
             }
 
@@ -588,9 +664,9 @@
                 } else {
                     mesas[index].status = "Libre"; mesas[index].waiter = "";
                 }
-                syncToCloud(); // <-- Dispara la actualización a internet
+                syncToCloud(); 
             }
-            showToast("¡Pedido guardado y enviado a la cocina por Internet!", "success");
+            showToast("¡Pedido guardado y enviado a la cocina!", "success");
             closeTableDrawer();
         }
 
@@ -600,7 +676,7 @@
             let index = mesas.findIndex(m => m.id === activeTable.id);
             if (index !== -1) {
                 mesas[index].status = "Cuenta";
-                syncToCloud(); // <-- Dispara la actualización a internet
+                syncToCloud(); 
             }
             showToast("¡Caja notificada de solicitud de cuenta!", "success");
             closeTableDrawer();
@@ -612,7 +688,7 @@
                 let index = mesas.findIndex(m => m.id === activeTable.id);
                 if (index !== -1) {
                     mesas[index].items = []; mesas[index].status = "Libre"; mesas[index].waiter = "";
-                    syncToCloud(); // <-- Dispara la actualización a internet
+                    syncToCloud(); 
                 }
                 showToast("Mesa liberada.", "info"); closeTableDrawer();
             }
@@ -621,18 +697,37 @@
         function addNewTable() {
             const tableName = prompt("Ingresa el nombre de la nueva mesa (Ej: Mesa 11):");
             if (!tableName || tableName.trim() === "") return;
-            mesas.push({ id: "M" + Date.now(), name: tableName.trim(), label: tableName.trim(), status: "Libre", items: [], waiter: "" });
-            syncToCloud(); // <-- Dispara la actualización a internet
-            showToast("Nueva mesa agregada en la nube.", "success");
+            
+            const cleanName = tableName.trim();
+            if (mesas.some(m => m.name.toLowerCase() === cleanName.toLowerCase())) {
+                showToast("Ya existe una mesa con ese nombre.", "error");
+                return;
+            }
+
+            const newId = "M" + Date.now();
+            mesas.push({ 
+                id: newId, 
+                name: cleanName, 
+                label: cleanName, 
+                status: "Libre", 
+                items: [], 
+                waiter: "" 
+            });
+            syncToCloud(); 
+            showToast(`Mesa '${cleanName}' agregada en la nube.`, "success");
         }
 
         function deleteCurrentTable() {
             if (!activeTable) return;
-            if (activeTable.items && activeTable.items.length > 0) { showToast("No puedes eliminar mesa con pedidos.", "error"); return; }
+            if (activeTable.items && activeTable.items.length > 0) { 
+                showToast("No puedes eliminar una mesa con pedidos activos.", "error"); 
+                return; 
+            }
             if (confirm(`¿ELIMINAR ${activeTable.name} del sistema permanentemente?`)) {
                 mesas = mesas.filter(m => m.id !== activeTable.id);
-                syncToCloud(); // <-- Dispara la actualización a internet
-                closeTableDrawer(); showToast("Mesa eliminada.", "info");
+                syncToCloud(); 
+                closeTableDrawer(); 
+                showToast(`Mesa '${activeTable.name}' eliminada.`, "info");
             }
         }
     </script>
