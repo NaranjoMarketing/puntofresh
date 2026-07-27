@@ -148,7 +148,7 @@
     <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-[90%] max-w-md text-center"></div>
 
     <!-- MODAL CONFIRMACIÓN PERSONALIZADO -->
-    <div id="custom-confirm-modal" class="fixed inset-0 z-[110] bg-fresh-purple/75 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="custom-confirm-modal" class="fixed inset-0 z-[250] bg-fresh-purple/75 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="confirm-box">
             <div class="text-center">
                 <div class="w-12 h-12 bg-fresh-lightPurple text-fresh-purple rounded-full flex items-center justify-center text-xl mx-auto mb-4">
@@ -538,9 +538,15 @@
                                 <option value="">-- Sin Mesa / Venta Rápida --</option>
                             </select>
 
-                            <div class="bg-fresh-lightPurple/50 p-2 rounded-lg border border-fresh-pink/20 flex items-center gap-2 mb-2 mt-1">
-                                <input type="checkbox" id="pos-is-takeaway" onchange="updatePOSCartUI()" class="w-4 h-4 text-fresh-purple rounded focus:ring-fresh-purple">
-                                <label for="pos-is-takeaway" class="text-xs font-bold text-fresh-purple cursor-pointer select-none">Pedido Para Llevar (+$2.000 por empaque)</label>
+                            <div class="bg-fresh-lightPurple/50 p-2 rounded-lg border border-fresh-pink/20 space-y-1.5 mb-2 mt-1">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="pos-is-takeaway" onchange="toggleTakeawayOrDelivery('takeaway')" class="w-4 h-4 text-fresh-purple rounded focus:ring-fresh-purple">
+                                    <label for="pos-is-takeaway" class="text-xs font-bold text-fresh-purple cursor-pointer select-none">🛍️ Pedido Para Llevar (+$2.000 por empaque)</label>
+                                </div>
+                                <div class="flex items-center gap-2 border-t border-fresh-pink/10 pt-1.5">
+                                    <input type="checkbox" id="pos-is-delivery" onchange="toggleTakeawayOrDelivery('delivery')" class="w-4 h-4 text-fresh-purple rounded focus:ring-fresh-purple">
+                                    <label for="pos-is-delivery" class="text-xs font-bold text-fresh-purple cursor-pointer select-none">🛵 Pedido Domicilio (+$2.000 envío + $2.000/empaque)</label>
+                                </div>
                             </div>
 
                             <label class="text-[10px] uppercase font-bold text-neutral-500">Datos del Cliente</label>
@@ -1438,7 +1444,22 @@
             // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL (MESAS)
             restauranteRef.onSnapshot((doc) => {
                 if (doc.exists) {
-                    mesas = doc.data().mesas || [];
+                    let rawMesas = doc.data().mesas || [];
+                    const uniqueMap = new Map();
+                    rawMesas.forEach(m => {
+                        if (!m || !m.name) return;
+                        const key = m.name.trim().toLowerCase();
+                        if (!uniqueMap.has(key)) {
+                            uniqueMap.set(key, m);
+                        } else {
+                            // If an occupied table or table with items exists, prioritize keeping the active one
+                            const existing = uniqueMap.get(key);
+                            if ((!existing.items || existing.items.length === 0) && (m.items && m.items.length > 0)) {
+                                uniqueMap.set(key, m);
+                            }
+                        }
+                    });
+                    mesas = Array.from(uniqueMap.values());
                     localStorage.setItem(DB_PREFIX + 'mesas_v2', JSON.stringify(mesas));
                     renderBillingTables();
                     populatePOSTableSelect();
@@ -2067,6 +2088,20 @@
                     <div class="space-y-3">`;
 
             pendingWebOrders.forEach((o, idx) => {
+                let baseQty = o.items.filter(i => i.id !== 'EMP-LLEVAR' && i.id !== 'ENVIO').reduce((s, i) => s + i.quantity, 0);
+                let hasEmp = o.items.some(i => i.id === 'EMP-LLEVAR');
+                let hasEnv = o.items.some(i => i.id === 'ENVIO');
+
+                let totalCalculado = o.items.reduce((s, i) => s + (i.price * i.quantity), 0);
+                if ((o.delivery === 'Domicilio' || o.delivery === 'Llevar' || o.delivery === 'Para Llevar') && !hasEmp) {
+                    totalCalculado += baseQty * 2000;
+                }
+                if (o.delivery === 'Domicilio' && !hasEnv) {
+                    totalCalculado += 2000;
+                }
+
+                let finalDisplayTotal = Math.max(o.total || 0, totalCalculado);
+
                 let listStr = o.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
                 html += `
                     <div class="bg-white p-3 rounded-xl border border-fresh-pink/10 flex flex-col sm:flex-row justify-between gap-3 text-xs">
@@ -2074,7 +2109,7 @@
                             <p class="font-bold text-fresh-purple text-sm">${o.clientName} <span class="bg-fresh-purple text-white text-[9px] px-2 py-0.5 rounded ml-1 font-bold uppercase">${o.delivery}</span></p>
                             <p class="text-[11px] text-neutral-600 mt-1"><i class="fa-solid fa-phone text-fresh-pink mr-1"></i> ${o.clientPhone}</p>
                             <p class="text-[11px] font-bold text-neutral-500 mt-1"><i class="fa-solid fa-ice-cream text-fresh-pink mr-1"></i> ${listStr}</p>
-                            <p class="text-xs font-black text-emerald-600 mt-1">Total: $${o.total.toLocaleString()} (${o.payment})</p>
+                            <p class="text-xs font-black text-emerald-600 mt-1">Total: $${finalDisplayTotal.toLocaleString()} (${o.payment})</p>
                         </div>
                         <div class="flex sm:flex-col gap-1.5 justify-center">
                             <button onclick="confirmWebOrder(${idx})" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-700 transition text-xs">Aprobar</button>
@@ -2093,13 +2128,23 @@
             let itemsToKitchen = order.items.map(i => ({
                 id: i.id, name: i.name, price: i.price, quantity: i.quantity, status: 'Pendiente', note: order.comment || ''
             }));
-            if(order.delivery === 'Domicilio') {
-                itemsToKitchen.push({ id: "ENVIO", name: "🛵 Costo Envío", price: 2000, quantity: 1, status: 'Listo', note: '' });
+
+            let baseItemsQty = itemsToKitchen.filter(i => i.id !== 'EMP-LLEVAR' && i.id !== 'ENVIO').reduce((s, i) => s + i.quantity, 0);
+            let isDelivery = (order.delivery === 'Domicilio');
+            let isTakeaway = (order.delivery === 'Llevar' || order.delivery === 'Para Llevar' || isDelivery);
+
+            if (isTakeaway && !itemsToKitchen.some(i => i.id === 'EMP-LLEVAR') && baseItemsQty > 0) {
+                itemsToKitchen.push({ id: "EMP-LLEVAR", name: "🥡 Empaques Para Llevar", price: 2000, quantity: baseItemsQty, status: 'Listo', note: '' });
             }
+
+            if (isDelivery && !itemsToKitchen.some(i => i.id === 'ENVIO')) {
+                itemsToKitchen.push({ id: "ENVIO", name: "🛵 Costo Domicilio", price: 2000, quantity: 1, status: 'Listo', note: '' });
+            }
+
             let newMesa = {
                 id: order.id,
-                name: order.delivery === 'Domicilio' ? "Domicilio - " + order.clientName : "Llevar - " + order.clientName,
-                label: (order.delivery==='Domicilio'?'🛵 ':'🛍️ ') + order.clientName,
+                name: isDelivery ? "Domicilio - " + order.clientName : "Llevar - " + order.clientName,
+                label: (isDelivery ? '🛵 ' : '🛍️ ') + order.clientName,
                 status: 'Ocupada',
                 items: itemsToKitchen,
                 waiter: 'App Cliente'
@@ -2175,9 +2220,11 @@
                 posCart.push({ id: i.id, name: i.name, price: i.price, quantity: i.quantity });
             });
             
-            // Si la mesa seleccionada incluye un empaque de llevar y el checkbox existe, lo marcamos
-            if(document.getElementById('pos-is-takeaway')) {
-                document.getElementById('pos-is-takeaway').checked = m.items.some(i => i.id === 'EMP-LLEVAR');
+            if (document.getElementById('pos-is-takeaway')) {
+                document.getElementById('pos-is-takeaway').checked = m.items.some(i => i.id === 'EMP-LLEVAR') && !m.items.some(i => i.id === 'ENVIO');
+            }
+            if (document.getElementById('pos-is-delivery')) {
+                document.getElementById('pos-is-delivery').checked = m.items.some(i => i.id === 'ENVIO');
             }
             
             updatePOSCartUI();
@@ -2208,20 +2255,47 @@
             updatePOSCartUI();
         }
 
+        function toggleTakeawayOrDelivery(type) {
+            const takeawayCb = document.getElementById('pos-is-takeaway');
+            const deliveryCb = document.getElementById('pos-is-delivery');
+            if (type === 'delivery' && deliveryCb && deliveryCb.checked) {
+                if (takeawayCb) takeawayCb.checked = false;
+            } else if (type === 'takeaway' && takeawayCb && takeawayCb.checked) {
+                if (deliveryCb) deliveryCb.checked = false;
+            }
+            updatePOSCartUI();
+        }
+
         function updatePOSCartUI() {
-            // LÓGICA AUTOMÁTICA OPCIÓN "PARA LLEVAR"
+            // LÓGICA AUTOMÁTICA OPCIONES "PARA LLEVAR" Y "DOMICILIO"
+            let isDelivery = document.getElementById('pos-is-delivery') && document.getElementById('pos-is-delivery').checked;
             let isTakeaway = document.getElementById('pos-is-takeaway') && document.getElementById('pos-is-takeaway').checked;
-            let baseItemsQty = posCart.filter(i => i.id !== 'EMP-LLEVAR').reduce((s,i) => s + i.quantity, 0);
+
+            let baseItemsQty = posCart.filter(i => i.id !== 'EMP-LLEVAR' && i.id !== 'ENVIO').reduce((s, i) => s + i.quantity, 0);
             let empIdx = posCart.findIndex(i => i.id === 'EMP-LLEVAR');
+            let envIdx = posCart.findIndex(i => i.id === 'ENVIO');
             
-            if (isTakeaway && baseItemsQty > 0) {
+            // Si es Domicilio o Para Llevar, se cobra empaque por cada producto
+            if ((isDelivery || isTakeaway) && baseItemsQty > 0) {
                 if (empIdx >= 0) {
                     posCart[empIdx].quantity = baseItemsQty;
                 } else {
                     posCart.push({ id: 'EMP-LLEVAR', name: '🥡 Empaques Para Llevar', price: 2000, quantity: baseItemsQty });
                 }
-            } else if ((!isTakeaway || baseItemsQty === 0) && empIdx >= 0) {
+            } else if (empIdx >= 0) {
                 posCart.splice(empIdx, 1);
+            }
+
+            // Recalcular índice tras posible splice
+            envIdx = posCart.findIndex(i => i.id === 'ENVIO');
+
+            // Si es Domicilio, se cobra costo del envío
+            if (isDelivery && baseItemsQty > 0) {
+                if (envIdx < 0) {
+                    posCart.push({ id: 'ENVIO', name: '🛵 Costo Domicilio', price: 2000, quantity: 1 });
+                }
+            } else if (envIdx >= 0) {
+                posCart.splice(envIdx, 1);
             }
 
             const container = document.getElementById('pos-cart-items'); container.innerHTML = '';
@@ -2266,6 +2340,7 @@
             document.getElementById('pos-mixed-nequi').value = '0';
             document.getElementById('pos-waiter-indicator').innerHTML = `Atiende: <span class="text-fresh-purple font-bold">Caja</span>`;
             if (document.getElementById('pos-is-takeaway')) document.getElementById('pos-is-takeaway').checked = false;
+            if (document.getElementById('pos-is-delivery')) document.getElementById('pos-is-delivery').checked = false;
             updatePOSCartUI();
         }
 
@@ -2342,6 +2417,12 @@
             let idVenta = "FAC-" + Math.floor(1000 + Math.random() * 9000);
             const finalWaiter = selectedTableWaiter || "Caja/Mostrador";
 
+            let isDelivery = document.getElementById('pos-is-delivery') && document.getElementById('pos-is-delivery').checked;
+            let isTakeaway = document.getElementById('pos-is-takeaway') && document.getElementById('pos-is-takeaway').checked;
+
+            let deliveryType = isDelivery ? "Domicilio" : (isTakeaway ? "Para Llevar" : (activeTableId ? "Mesa" : "Salón"));
+            let originLabel = isDelivery ? `🛵 Domicilio: ${finalName}` : (isTakeaway ? `🛍️ Para Llevar: ${finalName}` : (activeTableId ? `Mesa/Comanda: ${finalName}` : "Mostrador / Heladería"));
+
             let mixedDetails = null;
             if(posPayment === 'Mixto') {
                 let mCash = parseInt(document.getElementById('pos-mixed-cash').value) || 0;
@@ -2389,8 +2470,8 @@
                 date: new Date().toLocaleString(),
                 clientName: finalName,
                 clientPhone: document.getElementById('pos-client-phone').value || "-",
-                delivery: activeTableId ? "Mesa" : "Salón",
-                mesa_o_direccion: activeTableId ? `Mesa/Comanda: ${finalName}` : "Mostrador / Heladería",
+                delivery: deliveryType,
+                mesa_o_direccion: originLabel,
                 payment: posPayment,
                 mixedDetails: mixedDetails,
                 items: [...posCart],
@@ -2417,7 +2498,6 @@
                 });
             }
 
-            // En vez de imprimir directo, abre la previsualización digital del ticket en pantalla
             if (imprimir) {
                 generateAndPrintThermalTicket(newOrder);
             }
@@ -2538,9 +2618,16 @@
             const select = document.getElementById('pos-table-select');
             if(!select) return;
             select.innerHTML = '<option value="">-- Sin Mesa / Venta Rápida --</option>';
+            const seenNames = new Set();
+            const seenIds = new Set();
             mesas.forEach(m => {
+                if (!m || !m.id || !m.name) return;
+                const normName = m.name.trim().toLowerCase();
+                if (seenIds.has(m.id) || seenNames.has(normName)) return;
                 if (m.waiter === 'App Cliente') return; // SURGICAL FIX: Hide Web Orders from dropdown
                 
+                seenIds.add(m.id);
+                seenNames.add(normName);
                 let statusLabel = m.status === 'Ocupada' ? ' (Ocupada)' : (m.status === 'Cuenta' ? ' (Pide Cuenta)' : ' (Libre)');
                 select.innerHTML += `<option value="${m.id}">${m.name}${statusLabel}</option>`;
             });
@@ -2570,10 +2657,18 @@
             let table;
 
             if (!tableId) {
-                table = mesas.find(m => m.name.toLowerCase().includes('caja') || m.name.toLowerCase().includes('mostrador'));
+                // Se busca o crea automáticamente una entrada para Venta Rápida / Caja
+                table = mesas.find(m => m.id === 'MESA_CAJA' || m.name.toLowerCase().includes('caja') || m.name.toLowerCase().includes('mostrador'));
                 if (!table) {
-                    showToast("Crea una mesa llamada 'Caja' para poder enviar ventas rápidas a cocina.", "error");
-                    return;
+                    table = {
+                        id: "MESA_CAJA",
+                        name: "Venta Rápida / Caja",
+                        label: "Venta Rápida / Caja",
+                        status: "Ocupada",
+                        items: [],
+                        waiter: "Caja"
+                    };
+                    mesas.push(table);
                 }
             } else {
                 table = mesas.find(m => m.id === tableId);
@@ -2612,15 +2707,20 @@
 
             table.items = updatedItems;
             table.status = 'Ocupada';
+            table.waiter = 'Caja';
             if (tableId) {
-                table.waiter = 'Caja';
                 table.label = document.getElementById('pos-client-name').value || table.name;
             }
             
             saveState();
 
             showToast(`Pedido enviado a cocina con éxito.`, "success");
-            clearPOSCart();
+
+            // Solo se limpia la comanda si se seleccionó una mesa física.
+            // Para Venta Rápida (Sin Mesa), el carrito se conserva para poder facturar de inmediato sin que quede en $0.
+            if (tableId) {
+                clearPOSCart();
+            }
             renderBillingTables();
             populatePOSTableSelect();
         }
@@ -3259,7 +3359,16 @@
                 renderPOSProducts();
             }
             if (e.key === DB_PREFIX + 'mesas_v2') {
-                mesas = JSON.parse(e.newValue || '[]');
+                let rawMesas = JSON.parse(e.newValue || '[]');
+                const uniqueMap = new Map();
+                rawMesas.forEach(m => {
+                    if (!m || !m.name) return;
+                    const key = m.name.trim().toLowerCase();
+                    if (!uniqueMap.has(key)) {
+                        uniqueMap.set(key, m);
+                    }
+                });
+                mesas = Array.from(uniqueMap.values());
                 renderBillingTables();
                 populatePOSTableSelect();
             }
