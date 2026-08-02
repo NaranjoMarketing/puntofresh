@@ -1269,15 +1269,29 @@
         document.getElementById('confirm-cancel-btn').addEventListener('click', () => closeConfirmModal(false));
         document.getElementById('confirm-ok-btn').addEventListener('click', () => closeConfirmModal(true));
 
+        function deduplicateAndSanitizeOrders() {
+            if (!Array.isArray(orders)) orders = [];
+            const uniqueMap = new Map();
+            orders.forEach(o => {
+                if (o && o.id) {
+                    if (uniqueMap.has(o.id)) {
+                        const existing = uniqueMap.get(o.id);
+                        if (o.closed === true || existing.closed === true) {
+                            o.closed = true;
+                        }
+                        if (o.status === 'Anulado' || existing.status === 'Anulado') {
+                            o.status = 'Anulado';
+                            o.total = 0;
+                        }
+                    }
+                    uniqueMap.set(o.id, o);
+                }
+            });
+            orders = Array.from(uniqueMap.values());
+        }
+
         function saveState() {
-            // Deduplicación preventiva de órdenes por ID
-            if (Array.isArray(orders)) {
-                const uniqueOrders = new Map();
-                orders.forEach(o => {
-                    if (o && o.id) uniqueOrders.set(o.id, o);
-                });
-                orders = Array.from(uniqueOrders.values());
-            }
+            deduplicateAndSanitizeOrders();
 
             localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
             localStorage.setItem(DB_PREFIX + 'orders', JSON.stringify(orders));
@@ -1394,58 +1408,88 @@
         function parseLocalDate(dateStr) {
             if (!dateStr) return new Date(0);
             if (dateStr instanceof Date) return dateStr;
-            const parsed = Date.parse(dateStr);
-            if (!isNaN(parsed)) return new Date(parsed);
+
+            let standardParsed = new Date(dateStr);
+            if (!isNaN(standardParsed.getTime())) return standardParsed;
 
             try {
                 const cleanStr = String(dateStr).trim();
-                const parts = cleanStr.split(',')[0].split('/');
-                if (parts.length === 3) {
-                    const day = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    const year = parseInt(parts[2], 10);
-                    return new Date(year, month, day);
+                const [datePart, timePart] = cleanStr.split(/[\s,]+/);
+                if (datePart) {
+                    const parts = datePart.split('/');
+                    if (parts.length === 3) {
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1;
+                        const year = parseInt(parts[2], 10);
+
+                        let hours = 0, minutes = 0, seconds = 0;
+                        if (timePart) {
+                            const tBits = timePart.split(':');
+                            if (tBits.length >= 2) {
+                                hours = parseInt(tBits[0], 10) || 0;
+                                minutes = parseInt(tBits[1], 10) || 0;
+                                seconds = parseInt(tBits[2], 10) || 0;
+                            }
+                        }
+                        if (cleanStr.toLowerCase().includes('p.m.') || cleanStr.toLowerCase().includes('pm')) {
+                            if (hours < 12) hours += 12;
+                        } else if (cleanStr.toLowerCase().includes('a.m.') || cleanStr.toLowerCase().includes('am')) {
+                            if (hours === 12) hours = 0;
+                        }
+
+                        const d = new Date(year, month, day, hours, minutes, seconds);
+                        if (!isNaN(d.getTime())) return d;
+                    }
                 }
             } catch(e) {}
             return new Date(0);
         }
 
         function sanitizeLegacyOpenTransactions() {
-            if (cashRegisterState.active) {
+            deduplicateAndSanitizeOrders();
+            if (cashRegisterState.active && cashRegisterState.openingTime) {
                 const openingTimeMs = parseLocalDate(cashRegisterState.openingTime).getTime();
                 orders.forEach(o => {
-                    if (o.closed === undefined) {
-                        const orderTimeMs = parseLocalDate(o.date).getTime();
-                        o.closed = (orderTimeMs < openingTimeMs && orderTimeMs > 0);
+                    const orderTimeMs = parseLocalDate(o.date).getTime();
+                    if (o.closed === undefined || o.closed === false) {
+                        if (orderTimeMs > 0 && openingTimeMs > 0 && orderTimeMs < (openingTimeMs - 60000)) {
+                            o.closed = true;
+                        }
                     }
                 });
                 clients.forEach(c => {
                     if (c.transactions) {
                         c.transactions.forEach(t => {
-                            if (t.closed === undefined) {
+                            if (t.closed === undefined || t.closed === false) {
                                 const transTimeMs = parseLocalDate(t.date).getTime();
-                                t.closed = (transTimeMs < openingTimeMs && transTimeMs > 0);
+                                if (transTimeMs > 0 && openingTimeMs > 0 && transTimeMs < (openingTimeMs - 60000)) {
+                                    t.closed = true;
+                                }
                             }
                         });
                     }
                 });
                 expenses.forEach(e => {
-                    if (e.closed === undefined) {
+                    if (e.closed === undefined || e.closed === false) {
                         const expTimeMs = parseLocalDate(e.date).getTime();
-                        e.closed = (expTimeMs < openingTimeMs && expTimeMs > 0);
+                        if (expTimeMs > 0 && openingTimeMs > 0 && expTimeMs < (openingTimeMs - 60000)) {
+                            e.closed = true;
+                        }
                     }
                 });
                 cashAdjustments.forEach(a => {
-                    if (a.closed === undefined) {
+                    if (a.closed === undefined || a.closed === false) {
                         const adjTimeMs = parseLocalDate(a.date).getTime();
-                        a.closed = (adjTimeMs < openingTimeMs && adjTimeMs > 0);
+                        if (adjTimeMs > 0 && openingTimeMs > 0 && adjTimeMs < (openingTimeMs - 60000)) {
+                            a.closed = true;
+                        }
                     }
                 });
             } else {
-                orders.forEach(o => { if (o.closed === undefined) o.closed = true; });
-                clients.forEach(c => { if(c.transactions) c.transactions.forEach(t => { if (t.closed === undefined) t.closed = true; }); });
-                expenses.forEach(e => { if (e.closed === undefined) e.closed = true; });
-                cashAdjustments.forEach(a => { if (a.closed === undefined) a.closed = true; });
+                orders.forEach(o => { o.closed = true; });
+                clients.forEach(c => { if(c.transactions) c.transactions.forEach(t => { t.closed = true; }); });
+                expenses.forEach(e => { e.closed = true; });
+                cashAdjustments.forEach(a => { a.closed = true; });
             }
         }
 
@@ -1559,16 +1603,37 @@
                     const data = await response.json();
                     if(data) {
                         if(data.products) products = data.products;
-                        if(data.orders) orders = data.orders;
                         if(data.expenses) expenses = data.expenses;
                         if(data.purchases) purchasesHistory = data.purchases;
                         if(data.clients) clients = data.clients;
+
+                        if(data.orders && Array.isArray(data.orders)) {
+                            const localClosedMap = new Map();
+                            orders.forEach(o => {
+                                if (o && o.id && o.closed !== undefined) {
+                                    localClosedMap.set(o.id, o.closed);
+                                }
+                            });
+
+                            const uniqueCloudOrders = new Map();
+                            data.orders.forEach(o => {
+                                if (o && o.id) {
+                                    if (localClosedMap.has(o.id)) {
+                                        o.closed = localClosedMap.get(o.id);
+                                    }
+                                    uniqueCloudOrders.set(o.id, o);
+                                }
+                            });
+
+                            orders = Array.from(uniqueCloudOrders.values());
+                        }
                         saveState();
                     }
                 }
             } catch (err) {
                 console.warn("Mantenido con base de datos local.");
             }
+            deduplicateAndSanitizeOrders();
             sanitizeProducts();
             sanitizeLegacyOpenTransactions();
             initAdminDashboard();
@@ -1747,8 +1812,7 @@
         let activeOrdersCount = 0;
 
         function openCierreModal() {
-            // FIX: Filtrar estrictamente órdenes abiertas Y NO ANULADAS
-            const activeOrders = orders.filter(o => (o.closed === false || o.closed === undefined) && o.status !== 'Anulado' && o.status !== 'Cancelado');
+            const activeOrders = orders.filter(o => o.closed !== true && o.status !== 'Anulado' && o.status !== 'Cancelado');
             activeOrdersCount = activeOrders.length;
 
             expectedEfectivoSales = 0;
@@ -1778,15 +1842,15 @@
             clients.forEach(c => {
                 if (c.transactions) {
                     c.transactions.forEach(t => {
-                        if (t.type === 'payment' && (t.closed === false || t.closed === undefined)) {
+                        if (t.type === 'payment' && t.closed !== true) {
                             expectedAbonos += t.amount;
                         }
                     });
                 }
             });
 
-            expectedExpenses = expenses.filter(e => e.closed === false || e.closed === undefined).reduce((s, e) => s + e.val, 0);
-            expectedAdjustments = cashAdjustments.filter(a => a.closed === false || a.closed === undefined).reduce((s, a) => s + (a.type === 'In' ? a.amount : -a.amount), 0);
+            expectedExpenses = expenses.filter(e => e.closed !== true).reduce((s, e) => s + e.val, 0);
+            expectedAdjustments = cashAdjustments.filter(a => a.closed !== true).reduce((s, a) => s + (a.type === 'In' ? a.amount : -a.amount), 0);
 
             expectedCash = cashRegisterState.openingBalance + expectedEfectivoSales + expectedAbonos - expectedExpenses + expectedAdjustments;
 
