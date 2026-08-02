@@ -154,6 +154,14 @@
         
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+
+        // Configuración para garantizar respuesta instantánea sin bloqueos de WebSocket
+        try {
+            db.settings({ experimentalForceLongPolling: true });
+        } catch (e) {
+            console.log("Aviso settings Firestore:", e);
+        }
+
         const restauranteRef = db.collection('sistema').doc('estado_mesas');
 
         // Función para enviar las actualizaciones de cocina a internet
@@ -171,6 +179,7 @@
         let currentView = 'comandas'; 
         let audioEnabled = true;
         let lastKnownPendingCount = 0;
+        let isFetchingDirect = false;
 
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
@@ -251,11 +260,31 @@
             renderKitchen();
         }
 
+        // 🔄 FUNCIÓN DE VERIFICACIÓN CONTINUA DIRECTA AL SERVIDOR
+        async function fetchLatestDataDirect() {
+            if (isFetchingDirect) return;
+            isFetchingDirect = true;
+            try {
+                const doc = await restauranteRef.get({ source: 'server' });
+                if (doc.exists) {
+                    const newMesas = doc.data().mesas || [];
+                    if (JSON.stringify(mesas) !== JSON.stringify(newMesas)) {
+                        mesas = newMesas;
+                        renderKitchen();
+                    }
+                }
+            } catch (e) {
+                // Silencioso ante breves micro-cortes
+            } finally {
+                isFetchingDirect = false;
+            }
+        }
+
         function initKitchen() {
             updateClock();
             
-            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL
-            restauranteRef.onSnapshot((doc) => {
+            // 📡 ESCUCHADOR DE LA NUBE EN TIEMPO REAL CON METADATOS
+            restauranteRef.onSnapshot({ includeMetadataChanges: true }, (doc) => {
                 if (doc.exists) {
                     mesas = doc.data().mesas || [];
                     renderKitchen();
@@ -263,6 +292,9 @@
             }, (error) => {
                 showToast("Desconectado de la Nube", "error");
             });
+
+            // 🔄 RESPALDO EN SEGUNDO PLANO CADA 2.5s PARA GARANTIZAR LLEGADA INSTANTÁNEA
+            setInterval(fetchLatestDataDirect, 2500);
         }
 
         function renderKitchen() {
@@ -364,7 +396,7 @@
                             consolidatedProducts[i.name].qty += i.quantity;
                             if (i.status === 'Pendiente') consolidatedProducts[i.name].statusPending += i.quantity;
                             if (i.status === 'Preparando') consolidatedProducts[i.name].statusPreparing += i.quantity;
-                            if (i.note) consolidatedProducts[i.name].notes.push(`${i.quantity}x: "${i.note}" (${m.name})`);
+                            if (i.note) consolidatedProducts[i.note].notes.push(`${i.quantity}x: "${i.note}" (${m.name})`);
                         }
                     });
                 }
@@ -439,5 +471,7 @@
             showToast(`Lote actualizado a: ${newStatus.toUpperCase()}`, "success");
         }
     </script>
+</body>
+</html>
 </body>
 </html>
