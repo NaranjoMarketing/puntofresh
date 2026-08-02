@@ -4,12 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Punto Fresh - Heladería Artesanal Soft</title>
+    
+    <!-- External Libraries & Fonts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     
@@ -191,8 +194,8 @@
                 <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px]">Información de Despacho</p>
                 
                 <div class="grid grid-cols-2 gap-2">
-                    <button onclick="setDeliveryType('Llevar')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
-                        <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Llevar / Recoger
+                    <button onclick="setDeliveryType('Recoger')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
+                        <i class="fa-solid fa-store block text-center mb-0.5 text-xs"></i> Recoger en el local
                     </button>
                     <button onclick="setDeliveryType('Domicilio')" id="del-type-domicilio" class="py-2.5 rounded-xl font-bold border text-center transition-all">
                         <i class="fa-solid fa-motorcycle block text-center mb-0.5 text-xs"></i> Domicilio
@@ -204,6 +207,14 @@
                     <input type="number" id="cust-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-medium text-fresh-purple outline-none focus:border-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                     
                     <div id="domicilio-fields" class="hidden space-y-2">
+                        <div>
+                            <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">Zona de Domicilio *</label>
+                            <select id="cust-delivery-zone" onchange="setDeliveryZone(this.value)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple text-xs">
+                                <option value="Inírida">Inírida ($2.000)</option>
+                                <option value="Invasión">Invasión ($4.000)</option>
+                                <option value="Armada o Ejército">Armada o Ejército ($6.000)</option>
+                            </select>
+                        </div>
                         <input type="text" id="cust-address" placeholder="Dirección completa del domicilio *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                         <input type="text" id="cust-address-obs" placeholder="Observaciones para llegar a la dirección * (ej. Casa verde)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                     </div>
@@ -234,7 +245,7 @@
                     </div>
                     <div id="drawer-delivery-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Costo Envío:</span>
-                        <span>$2.000</span>
+                        <span id="drawer-delivery-cost">$2.000</span>
                     </div>
                     <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Empaques ($2.000 c/u):</span>
@@ -319,7 +330,12 @@
                     }
                     if(data.config) {
                         if(data.config.company_phone) companyPhone = data.config.company_phone;
-                        if(data.config.main_banner_img) mainBannerImg = data.config.main_banner_img;
+                        if(data.config.main_banner_img) {
+                            mainBannerImg = data.config.main_banner_img;
+                            localStorage.setItem(DB_PREFIX + 'mainBannerImg', mainBannerImg);
+                            const imgEl = document.getElementById('banner-img-display');
+                            if (imgEl) imgEl.src = mainBannerImg;
+                        }
                     }
                 }
             } catch (err) {
@@ -340,11 +356,23 @@
         let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3213169929";
         let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "76336493613";
 
+        const DELIVERY_ZONES = {
+            'Inírida': 2000,
+            'Invasión': 4000,
+            'Armada o Ejército': 6000
+        };
+        let deliveryZone = 'Inírida';
+
         let products = [];
         let cart = [];
         let selectedCategory = 'Todos';
-        let deliveryType = 'Llevar';
+        let deliveryType = 'Recoger';
         let paymentMethod = 'Nequi';
+
+        function setDeliveryZone(zone) {
+            deliveryZone = zone;
+            updateDrawerTotals();
+        }
 
         const DEFAULT_PRODUCTS = [
             { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Sabores Fresh", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
@@ -402,7 +430,7 @@
             buildCategoriesMenu();
             renderSpecials();
             renderProducts();
-            setDeliveryType('Llevar');
+            setDeliveryType('Recoger');
             setPaymentMethod('Nequi');
             updateCartBadge();
             
@@ -703,10 +731,16 @@
 
         function updateDrawerTotals() {
             const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
 
-            const deliveryCost = (deliveryType === 'Domicilio') ? 2000 : 0;
-            const packagingCost = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
+            // Empaque solo aplica a productos, no a adiciones o toppings
+            const packagedItemsQty = cart.filter(i => {
+                const cat = (i.category || '').toLowerCase();
+                return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
+            }).reduce((s, i) => s + i.quantity, 0);
+
+            // Se cobra estrictamente la tarifa correspondiente a la zona seleccionada
+            const deliveryCost = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
+            const packagingCost = packagedItemsQty * 2000;
 
             const total = subtotal + deliveryCost + packagingCost;
 
@@ -718,10 +752,15 @@
 
             if (deliveryType === 'Domicilio') {
                 deliveryRow.classList.remove('hidden');
+                document.getElementById('drawer-delivery-cost').innerText = `$${deliveryCost.toLocaleString()}`;
+            } else {
+                deliveryRow.classList.add('hidden');
+            }
+
+            if (packagingCost > 0) {
                 packagingRow.classList.remove('hidden');
                 document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
             } else {
-                deliveryRow.classList.add('hidden');
                 packagingRow.classList.add('hidden');
             }
         }
@@ -842,7 +881,7 @@
 
         function setDeliveryType(type) {
             deliveryType = type;
-            document.getElementById('del-type-llevar').className = type === 'Llevar' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
+            document.getElementById('del-type-llevar').className = type === 'Recoger' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
             document.getElementById('del-type-domicilio').className = type === 'Domicilio' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
 
             const domicilioFields = document.getElementById('domicilio-fields');
@@ -907,10 +946,15 @@
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Enviando a Caja...`;
 
             const rawSubtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
+            
+            const packagedItemsQty = cart.filter(i => {
+                const cat = (i.category || '').toLowerCase();
+                return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
+            }).reduce((s, i) => s + i.quantity, 0);
 
-            const deliveryFee = (deliveryType === 'Domicilio') ? 2000 : 0;
-            const packagingFee = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
+            // Se calcula únicamente la tarifa de la zona seleccionada
+            const deliveryFee = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
+            const packagingFee = packagedItemsQty * 2000;
             const finalTotal = rawSubtotal + deliveryFee + packagingFee;
 
             const orderId = "PF-WEB-" + Math.floor(1000 + Math.random() * 9000);
@@ -920,7 +964,8 @@
                 clientName: name,
                 clientPhone: phone,
                 delivery: deliveryType,
-                mesa_o_direccion: deliveryType === 'Domicilio' ? `${address} (${addressObs})` : 'Recoge en Local',
+                zona_domicilio: deliveryType === 'Domicilio' ? deliveryZone : 'N/A',
+                mesa_o_direccion: deliveryType === 'Domicilio' ? `[${deliveryZone}] ${address} (${addressObs})` : 'Recoge en Local',
                 payment: paymentMethod,
                 items: [...cart],
                 total: finalTotal,
@@ -991,6 +1036,8 @@
                 msg += `* ${item.quantity}x ${item.name}\n`;
             });
             msg += `------------------------------------\n`;
+            if (empaque > 0) msg += `Empaques: $${empaque.toLocaleString()}\n`;
+            if (delivery > 0) msg += `Domicilio (${order.zona_domicilio || 'Inírida'}): $${delivery.toLocaleString()}\n`;
             msg += `Total Pedido: $${total.toLocaleString()}\n`;
             msg += `------------------------------------\n`;
             
