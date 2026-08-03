@@ -224,6 +224,39 @@
         </div>
     </div>
 
+    <!-- MODAL EDITAR CLIENTE -->
+    <div id="edit-client-modal" class="fixed inset-0 z-[130] bg-fresh-purple/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="edit-client-box">
+            <h3 class="font-serif text-lg font-bold text-fresh-purple mb-1">Editar Datos del Cliente</h3>
+            <p class="text-xs text-neutral-500 mb-4 font-bold">Modifica la información general y cupo de crédito</p>
+            <input type="hidden" id="edit-client-id">
+            <div class="space-y-3 mb-4 text-xs">
+                <div>
+                    <label class="block font-bold text-neutral-500 mb-1">Nombre Completo</label>
+                    <input type="text" id="edit-client-name" placeholder="Nombre del cliente" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-xl font-bold text-fresh-purple outline-none focus:ring-2 focus:ring-fresh-purple">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-neutral-500 mb-1">Celular (WhatsApp)</label>
+                        <input type="text" id="edit-client-phone" placeholder="Celular" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-xl outline-none focus:ring-2 focus:ring-fresh-purple">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-neutral-500 mb-1">Cupo Máx. ($)</label>
+                        <input type="number" id="edit-client-limit" placeholder="Cupo Crédito" class="w-full bg-fresh-lightPurple border border-fresh-pink/30 py-2.5 px-3 rounded-xl font-bold text-fresh-purple outline-none focus:ring-2 focus:ring-fresh-purple">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-neutral-500 mb-1">Dirección de Domicilio</label>
+                    <input type="text" id="edit-client-address" placeholder="Dirección" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-xl outline-none focus:ring-2 focus:ring-fresh-purple">
+                </div>
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button onclick="closeEditClientModal()" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="saveEditClient()" class="px-5 py-2 bg-fresh-purple hover:bg-fresh-dark text-white text-xs font-bold rounded-xl shadow-md">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL APERTURA DE CAJA -->
     <div id="apertura-modal" class="fixed inset-0 z-[120] bg-fresh-purple/85 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="bg-white max-w-xs w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="apertura-box">
@@ -685,6 +718,14 @@
                                 <span><i class="fa-solid fa-phone text-fresh-pink mr-1"></i> <span id="stmt-phone"></span></span>
                                 <span><i class="fa-solid fa-location-dot text-fresh-pink mr-1"></i> <span id="stmt-address"></span></span>
                             </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openEditClientModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1 transition-all">
+                                <i class="fa-solid fa-user-pen"></i> Editar
+                            </button>
+                            <button onclick="deleteCurrentClient()" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1 transition-all">
+                                <i class="fa-solid fa-user-xmark"></i> Eliminar
+                            </button>
                         </div>
                     </div>
                     
@@ -2923,6 +2964,101 @@
             showToast("Cliente registrado exitosamente.", "success");
         }
 
+        function openEditClientModal(clientId = null) {
+            const idToEdit = clientId || (currentSelectedClient ? currentSelectedClient.id : null);
+            if (!idToEdit) {
+                showToast("Selecciona un cliente para editar.", "error");
+                return;
+            }
+            const client = clients.find(c => c.id === idToEdit);
+            if (!client) return;
+
+            document.getElementById('edit-client-id').value = client.id;
+            document.getElementById('edit-client-name').value = client.name;
+            document.getElementById('edit-client-phone').value = client.phone || '';
+            document.getElementById('edit-client-limit').value = client.maxCredit || 0;
+            document.getElementById('edit-client-address').value = client.address || '';
+
+            const modal = document.getElementById('edit-client-modal');
+            const box = document.getElementById('edit-client-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeEditClientModal() {
+            const modal = document.getElementById('edit-client-modal');
+            const box = document.getElementById('edit-client-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function saveEditClient() {
+            const id = document.getElementById('edit-client-id').value;
+            const client = clients.find(c => c.id === id);
+            if (!client) return;
+
+            const name = document.getElementById('edit-client-name').value.trim();
+            const phone = document.getElementById('edit-client-phone').value.trim();
+            const limit = parseInt(document.getElementById('edit-client-limit').value) || 0;
+            const address = document.getElementById('edit-client-address').value.trim();
+
+            if (!name) {
+                showToast("El nombre del cliente no puede estar vacío.", "error");
+                return;
+            }
+
+            client.name = name;
+            client.phone = phone || "Sin teléfono";
+            client.maxCredit = limit;
+            client.address = address || "No registrada";
+
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+
+            closeEditClientModal();
+            renderClientsList();
+            populatePOSClientSelect();
+
+            if (currentSelectedClient && currentSelectedClient.id === id) {
+                renderAccountStatement();
+            }
+
+            showToast("Información del cliente actualizada.", "success");
+        }
+
+        async function deleteClientById(id) {
+            const client = clients.find(c => c.id === id);
+            if (!client) return;
+
+            const confirm = await showCustomConfirm(
+                "Eliminar Cliente", 
+                `¿Estás seguro de eliminar a "${client.name}" del directorio y todo su historial de crédito?`
+            );
+
+            if (confirm) {
+                clients = clients.filter(c => c.id !== id);
+                
+                if (currentSelectedClient && currentSelectedClient.id === id) {
+                    currentSelectedClient = null;
+                    document.getElementById('client-statement-panel').classList.add('hidden', 'opacity-0');
+                    document.getElementById('client-empty-state').classList.remove('hidden');
+                }
+
+                saveState();
+                sincronizarConGoogle("syncClients", clients);
+                renderClientsList();
+                populatePOSClientSelect();
+                showToast(`Cliente "${client.name}" eliminado con éxito.`, "info");
+            }
+        }
+
+        function deleteCurrentClient() {
+            if (!currentSelectedClient) return;
+            deleteClientById(currentSelectedClient.id);
+        }
+
         function renderClientsList() {
             const container = document.getElementById('clients-list-container');
             if (!container) return;
@@ -2939,16 +3075,22 @@
             filtered.forEach(c => {
                 let balance = (c.transactions || []).reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
                 container.innerHTML += `
-                    <button onclick="selectClient('${c.id}')" class="w-full p-3 rounded-xl border border-fresh-pink/20 text-left bg-neutral-50 hover:bg-fresh-lightPurple flex justify-between items-center transition-all shadow-sm">
-                        <div class="overflow-hidden">
+                    <div class="w-full p-3 rounded-xl border border-fresh-pink/20 bg-neutral-50 hover:bg-fresh-lightPurple flex justify-between items-center transition-all shadow-sm group">
+                        <button onclick="selectClient('${c.id}')" class="text-left flex-grow overflow-hidden pr-2">
                             <p class="font-bold text-fresh-purple text-xs truncate uppercase">${c.name}</p>
-                            <p class="text-[10px] text-neutral-500"><i class="fa-solid fa-phone"></i> ${c.phone}</p>
+                            <p class="text-[10px] text-neutral-500"><i class="fa-solid fa-phone"></i> ${c.phone || 'Sin cel'}</p>
+                        </button>
+                        <div class="text-right shrink-0 flex items-center gap-2">
+                            <div onclick="selectClient('${c.id}')" class="cursor-pointer">
+                                <p class="text-[9px] font-bold text-neutral-400 uppercase">Deuda</p>
+                                <p class="font-black text-xs ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}">$${balance.toLocaleString()}</p>
+                            </div>
+                            <div class="flex items-center gap-1 border-l pl-2 border-neutral-200">
+                                <button onclick="event.stopPropagation(); openEditClientModal('${c.id}')" class="text-blue-600 hover:text-blue-800 p-1" title="Editar cliente"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); deleteClientById('${c.id}')" class="text-rose-500 hover:text-rose-700 p-1" title="Eliminar cliente"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                            </div>
                         </div>
-                        <div class="text-right shrink-0 ml-2">
-                            <p class="text-[9px] font-bold text-neutral-400 uppercase">Deuda</p>
-                            <p class="font-black text-xs ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}">$${balance.toLocaleString()}</p>
-                        </div>
-                    </button>`;
+                    </div>`;
             });
         }
 
