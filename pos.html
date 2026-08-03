@@ -385,6 +385,23 @@
         </div>
     </div>
 
+    <!-- MODAL DEUDA PASADA DE CLIENTES -->
+    <div id="past-debt-modal" class="fixed inset-0 z-[120] bg-fresh-purple/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white max-w-xs w-full rounded-2xl p-6 shadow-2xl border border-fresh-pink/20 transform scale-95 transition-transform duration-300" id="past-debt-box">
+            <h3 class="font-serif text-lg font-bold text-fresh-purple mb-1">Registrar Deuda Pasada</h3>
+            <p id="past-debt-client-name" class="text-xs text-neutral-500 mb-3 font-bold">Cliente</p>
+            <p class="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 mb-3">Este valor se sumará al saldo del cliente sin alterar la caja del turno de hoy.</p>
+            <div class="space-y-3 mb-4">
+                <input type="number" id="past-debt-amount" placeholder="Monto de compra ($)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-xl text-xs font-bold text-fresh-purple outline-none focus:ring-2 focus:ring-fresh-purple">
+                <input type="text" id="past-debt-note" placeholder="Detalle (Ej: Crédito viernes pasado)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2.5 px-3 rounded-xl text-xs outline-none focus:ring-2 focus:ring-fresh-purple">
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button onclick="closePastDebtModal()" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="processPastDebt()" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md">Registrar Deuda</button>
+            </div>
+        </div>
+    </div>
+
     <!-- HEADER DE CONTROL GENERAL -->
     <header class="bg-fresh-purple py-4 px-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
@@ -567,7 +584,7 @@
                                 <input type="text" id="pos-client-phone" placeholder="WhatsApp (Opcional)" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
                                 <input type="text" id="pos-client-address" placeholder="Dirección Domicilio" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
                             </div>
-                            <input type="text" id="pos-client-comment" placeholder="Comentario / Nota interna" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
+                            <input type="text" id="pos-client-comment" placeholder="Comentario / Nota interna / Sabores" class="w-full bg-neutral-50 border border-fresh-pink/20 py-2 px-3 rounded-lg text-xs">
                             <input type="hidden" id="pos-selected-table-id" value="">
                             <p class="text-[10px] text-neutral-400" id="pos-waiter-indicator">Atiende: <span class="text-fresh-purple font-bold">Caja</span></p>
                         </div>
@@ -707,9 +724,10 @@
                     
                     <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
                         <h3 class="font-bold text-sm text-fresh-purple uppercase tracking-wide">Movimientos y Facturas</h3>
-                        <div class="flex gap-2">
-                            <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
-                            <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="openPastDebtModal()" class="bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-clock-rotate-left"></i> Registrar Deuda Pasada</button>
+                            <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
+                            <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
                         </div>
                     </div>
                     
@@ -1131,13 +1149,14 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const restauranteRef = db.collection('sistema').doc('estado_mesas');
+        const cashRegisterRef = db.collection('sistema').doc('estado_caja');
 
         async function syncToCloud() {
             try {
                 await restauranteRef.set({ mesas: mesas }, { merge: true });
+                await cashRegisterRef.set({ cashRegisterState: cashRegisterState }, { merge: true });
             } catch (error) {
                 console.error("Error conectando a la nube: ", error);
-                showToast("Revisar conexión a internet.", "error");
             }
         }
 
@@ -1510,9 +1529,18 @@
                 return !hasNoId;
             });
 
-            products.forEach(p => {
+            const seenIds = new Set();
+            products.forEach((p, idx) => {
                 p.name = p.name ? String(p.name).trim() : "Helado Sin Nombre";
-                p.id = String(p.id).trim();
+                let cleanId = String(p.id).trim();
+                
+                // Garantizar identificadores únicos estrictos por producto
+                if (seenIds.has(cleanId)) {
+                    cleanId = getDeterministicId(p.name + "_" + idx);
+                }
+                seenIds.add(cleanId);
+
+                p.id = cleanId;
                 p.cost = parseInt(p.cost) || 0;
                 p.price = parseInt(p.price) || 0;
                 p.stock = parseInt(p.stock) || 0;
@@ -1525,6 +1553,20 @@
         function initApp() {
             checkSession();
             
+            // ESCUCHADOR EN TIEMPO REAL - ESTADO DE CAJA PERSISTENTE
+            cashRegisterRef.onSnapshot((doc) => {
+                if (doc.exists && doc.data().cashRegisterState) {
+                    const cloudState = doc.data().cashRegisterState;
+                    if (cloudState && typeof cloudState.active === 'boolean') {
+                        cashRegisterState = cloudState;
+                        localStorage.setItem(DB_PREFIX + 'cashRegisterState', JSON.stringify(cashRegisterState));
+                        updateCashRegisterUI();
+                    }
+                }
+            }, (error) => {
+                console.warn("Estado de caja cargado desde almacenamiento local.");
+            });
+
             restauranteRef.onSnapshot((doc) => {
                 if (doc.exists) {
                     let rawMesas = doc.data().mesas || [];
@@ -1857,7 +1899,7 @@
             currentCierreCategorias = {};
             activeOrders.forEach(o => {
                 o.items.forEach(item => {
-                    const prod = products.find(p => String(p.id) === String(item.id));
+                    const prod = products.find(p => String(p.id).trim() === String(item.id).trim());
                     const catName = prod ? prod.category : "Heladería General";
                     if (!currentCierreCategorias[catName]) {
                         currentCierreCategorias[catName] = { qty: 0, total: 0 };
@@ -2173,7 +2215,6 @@
                     <div class="space-y-3">`;
 
             pendingWebOrders.forEach((o, idx) => {
-                // Preservar la lista y formato original de ítems con sus adiciones y notas
                 let listStr = o.items.map(i => {
                     let desc = `${i.quantity}x ${i.name}`;
                     if (i.note) desc += ` (${i.note})`;
@@ -2205,7 +2246,6 @@
             let order = pendingWebOrders[idx];
             if(!order) return;
 
-            // FIX: Conservar exactamente los ítems, precios, notas y adicionales provenientes del frontend cliente
             let itemsToKitchen = order.items.map(i => ({
                 id: i.id || ("WEB-" + Math.floor(Math.random()*1000)),
                 name: i.name,
@@ -2304,6 +2344,10 @@
                 });
             });
             
+            if (m.comment) {
+                document.getElementById('pos-client-comment').value = m.comment;
+            }
+
             if (document.getElementById('pos-is-takeaway')) {
                 document.getElementById('pos-is-takeaway').checked = m.items.some(i => i.id === 'EMP-LLEVAR') && !m.items.some(i => i.id === 'ENVIO');
             }
@@ -2319,15 +2363,18 @@
             const search = document.getElementById('pos-search').value.toLowerCase();
             let filtered = products.filter(p => p.name.toLowerCase().includes(search) || p.category.toLowerCase().includes(search));
             filtered.forEach(p => {
-                grid.innerHTML += `<div onclick="addToPOS('${p.id}')" class="bg-neutral-50 p-2.5 rounded-xl border border-fresh-pink/10 cursor-pointer hover:bg-neutral-100 flex flex-col justify-between h-20 shadow-sm transition active:scale-95"><p class="font-bold text-[11px] text-fresh-purple line-clamp-2 leading-tight">${p.name}</p><div class="flex justify-between items-end mt-1"><span class="text-[8px] bg-fresh-purple text-white px-1 py-0.5 rounded">Menú</span><p class="font-black text-xs text-fresh-purple">$${p.price.toLocaleString()}</p></div></div>`;
+                const safeId = String(p.id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                grid.innerHTML += `<div onclick="addToPOS('${safeId}')" class="bg-neutral-50 p-2.5 rounded-xl border border-fresh-pink/10 cursor-pointer hover:bg-neutral-100 flex flex-col justify-between h-20 shadow-sm transition active:scale-95"><p class="font-bold text-[11px] text-fresh-purple line-clamp-2 leading-tight">${p.name}</p><div class="flex justify-between items-end mt-1"><span class="text-[8px] bg-fresh-purple text-white px-1 py-0.5 rounded">Menú</span><p class="font-black text-xs text-fresh-purple">$${p.price.toLocaleString()}</p></div></div>`;
             }); updatePOSCartUI();
         }
 
         function searchPOSProducts() { renderPOSProducts(); }
 
         function addToPOS(id) {
-            const p = products.find(x => String(x.id) === String(id));
-            let exist = posCart.find(i => String(i.id) === String(id) && !i.sentToKitchen);
+            const targetId = String(id).trim();
+            const p = products.find(x => String(x.id).trim() === targetId);
+            if (!p) return;
+            let exist = posCart.find(i => String(i.id).trim() === targetId && !i.sentToKitchen);
             if (exist) exist.quantity++;
             else posCart.push({ id: p.id, name: p.name, price: p.price, quantity: 1, sentToKitchen: false });
             updatePOSCartUI();
@@ -2379,7 +2426,6 @@
             let empIdx = posCart.findIndex(i => i.id === 'EMP-LLEVAR');
             let envIdx = posCart.findIndex(i => i.id === 'ENVIO');
             
-            // Lógica manual de empaques para evitar cobrar empaques en adiciones
             if ((isDelivery || isTakeaway) && empQty > 0) {
                 if (empIdx >= 0) {
                     posCart[empIdx].quantity = empQty;
@@ -2392,7 +2438,6 @@
 
             envIdx = posCart.findIndex(i => i.id === 'ENVIO');
 
-            // Lógica de 3 Zonas de Domicilio
             if (isDelivery) {
                 let zoneSelect = document.getElementById('pos-delivery-zone');
                 let zoneVal = zoneSelect ? (parseInt(zoneSelect.value) || 2000) : 2000;
@@ -2629,11 +2674,12 @@
                     table.status = 'Libre';
                     table.label = table.name;
                     table.waiter = "";
+                    table.comment = "";
                 }
             }
 
             posCart.forEach(item => {
-                let p = products.find(x => String(x.id) === String(item.id));
+                let p = products.find(x => String(x.id).trim() === String(item.id).trim());
                 if(p) {
                     p.sales = (p.sales || 0) + item.quantity;
                     p.stock = Math.max(0, p.stock - item.quantity);
@@ -2765,6 +2811,10 @@
                 showToast("No hay artículos en la comanda para enviar a la cocina.", "error");
                 return;
             }
+
+            const commentInput = document.getElementById('pos-client-comment');
+            const mainNote = commentInput ? commentInput.value.trim() : "";
+
             let tableId = document.getElementById('pos-selected-table-id').value || document.getElementById('pos-table-select').value;
             let table;
 
@@ -2790,7 +2840,6 @@
                 return;
             }
 
-            // Identificar los productos extras que aún no se han enviado a cocina
             let extraItemsCount = 0;
             let updatedItems = [];
 
@@ -2800,20 +2849,25 @@
                     extraItemsCount += cartItem.quantity;
                 }
 
+                const itemNote = cartItem.note && cartItem.note.trim() !== "" ? cartItem.note : mainNote;
+
                 updatedItems.push({
                     id: cartItem.id,
                     name: cartItem.name,
                     price: cartItem.price,
                     quantity: cartItem.quantity,
                     status: 'Pendiente',
-                    sentToKitchen: true, // Se marca enviado a cocina
-                    note: cartItem.note || ''
+                    sentToKitchen: true,
+                    note: itemNote
                 });
             });
 
             table.items = updatedItems;
             table.status = 'Ocupada';
             table.waiter = selectedTableWaiter || 'Caja';
+            if (mainNote) {
+                table.comment = mainNote;
+            }
             if (tableId) {
                 table.label = document.getElementById('pos-client-name').value || table.name;
             }
@@ -2826,7 +2880,6 @@
                 showToast(`Pedido actualizado en cocina.`, "info");
             }
 
-            // Actualizar carrito local para reflejar que ya están enviados
             posCart.forEach(i => i.sentToKitchen = true);
             updatePOSCartUI();
             renderBillingTables();
@@ -2944,12 +2997,144 @@
                 rows.innerHTML += `
                     <tr class="hover:bg-neutral-50 text-xs ${isAnnulled ? 'opacity-50 line-through' : ''}">
                         <td class="p-3">${t.date}</td>
-                        <td class="p-3 font-medium">${isInvoice ? 'Factura ' + t.id : (isAnnulled ? 'Anulado' : 'Abono Recibido')}</td>
+                        <td class="p-3 font-medium">${isInvoice ? (t.note || 'Factura ' + t.id) : (isAnnulled ? 'Anulado' : 'Abono Recibido')}</td>
                         <td class="p-3 text-right font-bold text-red-600">${isInvoice ? '$' + t.total.toLocaleString() : '-'}</td>
                         <td class="p-3 text-right font-bold text-emerald-600">${t.type === 'payment' ? '$' + t.amount.toLocaleString() : '-'}</td>
                         <td class="p-3 text-right font-black text-fresh-purple">$${accum.toLocaleString()}</td>
                     </tr>`;
             });
+        }
+
+        function openAbonoModal() {
+            if (!currentSelectedClient) {
+                showToast("Selecciona un cliente del directorio.", "error");
+                return;
+            }
+            document.getElementById('abono-client-name').innerText = currentSelectedClient.name;
+            document.getElementById('abono-amount').value = '';
+            
+            const modal = document.getElementById('abono-modal');
+            const box = document.getElementById('abono-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeAbonoModal() {
+            const modal = document.getElementById('abono-modal');
+            const box = document.getElementById('abono-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function processAbono() {
+            if (!currentSelectedClient) return;
+            const amount = parseInt(document.getElementById('abono-amount').value);
+            if (isNaN(amount) || amount <= 0) {
+                showToast("Ingresa un monto de abono válido.", "error");
+                return;
+            }
+
+            if (!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
+            
+            const newTransaction = {
+                id: "ABO-" + Math.floor(1000 + Math.random() * 9000),
+                date: new Date().toLocaleString(),
+                type: 'payment',
+                amount: amount,
+                closed: false 
+            };
+
+            currentSelectedClient.transactions.push(newTransaction);
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+
+            closeAbonoModal();
+            renderAccountStatement();
+            renderClientsList();
+            showToast(`Abono de $${amount.toLocaleString()} registrado con éxito.`, "success");
+        }
+
+        async function settleClientBalance() {
+            if (!currentSelectedClient) return;
+            let balance = (currentSelectedClient.transactions || []).reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+            if (balance <= 0) {
+                showToast("El cliente no tiene saldo pendiente.", "info");
+                return;
+            }
+
+            const confirmSettle = await showCustomConfirm("Liquidar Deuda Total", `¿Registrar pago total de $${balance.toLocaleString()} para ${currentSelectedClient.name}?`);
+            if (!confirmSettle) return;
+
+            if (!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
+            currentSelectedClient.transactions.push({
+                id: "LIQ-" + Math.floor(1000 + Math.random() * 9000),
+                date: new Date().toLocaleString(),
+                type: 'payment',
+                amount: balance,
+                closed: false
+            });
+
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+            renderAccountStatement();
+            renderClientsList();
+            showToast("Deuda del cliente liquidada completamente.", "success");
+        }
+
+        function openPastDebtModal() {
+            if (!currentSelectedClient) {
+                showToast("Selecciona un cliente del directorio.", "error");
+                return;
+            }
+            document.getElementById('past-debt-client-name').innerText = currentSelectedClient.name;
+            document.getElementById('past-debt-amount').value = '';
+            document.getElementById('past-debt-note').value = '';
+
+            const modal = document.getElementById('past-debt-modal');
+            const box = document.getElementById('past-debt-box');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closePastDebtModal() {
+            const modal = document.getElementById('past-debt-modal');
+            const box = document.getElementById('past-debt-box');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function processPastDebt() {
+            if (!currentSelectedClient) return;
+            const amount = parseInt(document.getElementById('past-debt-amount').value);
+            const note = document.getElementById('past-debt-note').value.trim() || "Deuda Registrada (Anterior)";
+
+            if (isNaN(amount) || amount <= 0) {
+                showToast("Ingresa un monto válido.", "error");
+                return;
+            }
+
+            if (!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
+
+            currentSelectedClient.transactions.push({
+                id: "PAS-" + Math.floor(1000 + Math.random() * 9000),
+                date: new Date().toLocaleDateString() + " (Anterior)",
+                type: 'invoice',
+                total: amount,
+                note: note,
+                closed: true
+            });
+
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+
+            closePastDebtModal();
+            renderAccountStatement();
+            renderClientsList();
+            showToast(`Deuda de $${amount.toLocaleString()} registrada al cliente sin alterar la caja de hoy.`, "success");
         }
 
         function promptNewCategory() {
@@ -3001,7 +3186,7 @@
             let existingProduct = null;
             let finalId = id;
             if (id && id !== "") {
-                existingProduct = products.find(p => String(p.id) === String(id));
+                existingProduct = products.find(p => String(p.id).trim() === String(id).trim());
             }
             if (!finalId || finalId === "") {
                 finalId = getDeterministicId(name);
@@ -3022,7 +3207,7 @@
                 isSpecial: isSpecial
             };
 
-            const exactIdIdx = (id && id !== "") ? products.findIndex(p => String(p.id) === String(id)) : -1;
+            const exactIdIdx = (id && id !== "") ? products.findIndex(p => String(p.id).trim() === String(id).trim()) : -1;
             const fallbackNameIdx = products.findIndex(p => String(p.name).toLowerCase() === String(name).toLowerCase());
 
             if (exactIdIdx !== -1) {
@@ -3093,7 +3278,7 @@
         }
 
         function editProduct(id) {
-            const p = products.find(x => String(x.id) === String(id));
+            const p = products.find(x => String(x.id).trim() === String(id).trim());
             if (!p) {
                 showToast("No se pudo cargar el producto para editar.", "error");
                 return;
@@ -3114,7 +3299,7 @@
         async function deleteProduct(id) {
             const confirm = await showCustomConfirm("Eliminar", "¿Eliminar artículo?");
             if(confirm) {
-                products = products.filter(p => String(p.id) !== String(id));
+                products = products.filter(p => String(p.id).trim() !== String(id).trim());
                 sincronizarConGoogle("syncProducts", products); saveState(); renderInventory();
                 showToast("Eliminado del catálogo.", "success");
             }
@@ -3223,7 +3408,7 @@
         function renderFinances() {
             let rev = 0, cost = 0, exp = 0;
             let waiterStats = {};
-            let categoryStats = {}; // Para la visualización de Ventas por Categoría (Liquidación)
+            let categoryStats = {};
             
             let filteredOrders = [];
             let filteredExpenses = [];
@@ -3244,7 +3429,6 @@
                     return expDate >= startDate && expDate <= endDate;
                 });
             } else {
-                // Ventas activas del turno (sin anuladas)
                 filteredOrders = orders.filter(o => (o.closed === false || o.closed === undefined) && o.status !== 'Anulado' && o.status !== 'Cancelado');
                 filteredExpenses = expenses.filter(e => e.closed === false || e.closed === undefined);
             }
@@ -3257,7 +3441,7 @@
                 waiterStats[wKey].amount += o.total;
 
                 o.items.forEach(i => {
-                    let prod = products.find(p => String(p.id) === String(i.id));
+                    let prod = products.find(p => String(p.id).trim() === String(i.id).trim());
                     let catName = prod ? prod.category : "General / Varios";
                     if (prod) cost += (prod.cost * i.quantity);
 
@@ -3276,7 +3460,6 @@
             document.getElementById('metric-expenses').innerText = `$${exp.toLocaleString()}`;
             document.getElementById('metric-profit').innerText = `$${(rev - cost - exp).toLocaleString()}`;
 
-            // RENDER: Tabla de Ventas por Categoría (Para liquidar comida/helados/socios)
             const catBody = document.getElementById('finance-categories-leaderboard-rows');
             if (catBody) {
                 catBody.innerHTML = '';
@@ -3298,7 +3481,6 @@
                 }
             }
 
-            // RENDER: Productos líderes (Excluyendo ventas anuladas)
             let continuousProductStats = {};
             orders.filter(o => o.status !== 'Anulado' && o.status !== 'Cancelado').forEach(o => {
                 o.items.forEach(i => {
@@ -3395,10 +3577,10 @@
             if (o) {
                 o.status = 'Anulado';
                 o.total = 0; 
-                o.mixedDetails = null; // FIX: Resetear desglose mixto para que no afecte esperados en caja
+                o.mixedDetails = null;
                 
                 o.items.forEach(item => {
-                    let p = products.find(x => String(x.id) === String(item.id));
+                    let p = products.find(x => String(x.id).trim() === String(item.id).trim());
                     if (p) {
                         p.stock = (p.stock || 0) + item.quantity;
                         p.sales = Math.max(0, (p.sales || 0) - item.quantity);
@@ -3555,5 +3737,7 @@
             }
         });
     </script>
+</body>
+</html>
 </body>
 </html>
