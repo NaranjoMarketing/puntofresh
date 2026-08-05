@@ -309,29 +309,50 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const DB_PREFIX = "PUNTOFRESH_V1_";
+        const DB_PREFIX = "PUNTOFRESH_V2_";
         const URL_API = 'https://script.google.com/macros/s/AKfycbyEMUFe0c-Nelpo_Q7OShxYwzodE_Pd1NAJDoblCKr-RJDkyGU2208deURVIFSMgk3x/exec';
 
         function removeAccents(str) {
             return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         }
 
+        // Sanitizador quirúrgico para corregir errores 404 de URLs relativas
+        function sanitizeImageUrl(url) {
+            if (!url) return "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
+            if (url === "punto-fresh-toppings.png" || !url.startsWith("http")) {
+                return "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
+            }
+            return url;
+        }
+
         async function loadDataFromCloud() {
             try {
                 if (!URL_API || URL_API.includes("REEMPLAZAR")) return;
                 
-                const response = await fetch(URL_API);
+                // Parámetro anti-caché para forzar la descarga en tiempo real
+                const fetchUrl = URL_API + (URL_API.includes('?') ? '&' : '?') + 't=' + Date.now();
+                const response = await fetch(fetchUrl);
                 const data = await response.json();
                 
                 if(data) {
-                    if(data.products && data.products.length > 0) {
-                        products = data.products;
+                    let fetchedProducts = [];
+                    if (Array.isArray(data)) {
+                        fetchedProducts = data;
+                    } else if (data.products && Array.isArray(data.products)) {
+                        fetchedProducts = data.products;
+                    }
+
+                    if(fetchedProducts.length > 0) {
+                        products = fetchedProducts.map(p => ({
+                            ...p,
+                            img: sanitizeImageUrl(p.img)
+                        }));
                         localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
                     }
                     if(data.config) {
                         if(data.config.company_phone) companyPhone = data.config.company_phone;
                         if(data.config.main_banner_img) {
-                            mainBannerImg = data.config.main_banner_img;
+                            mainBannerImg = sanitizeImageUrl(data.config.main_banner_img);
                             localStorage.setItem(DB_PREFIX + 'mainBannerImg', mainBannerImg);
                             const imgEl = document.getElementById('banner-img-display');
                             if (imgEl) imgEl.src = mainBannerImg;
@@ -349,30 +370,19 @@
 
         let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
         let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros";
-        let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
+        let storedBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg');
+        let mainBannerImg = sanitizeImageUrl(storedBannerImg);
         let bannerTitle = localStorage.getItem(DB_PREFIX + 'bannerTitle') || "Refresca y endulza tu vida";
         let bannerDesc = localStorage.getItem(DB_PREFIX + 'bannerDesc') || "Disfruta de nuestros espectaculares helados soft creados con ingredientes de la más alta calidad, granizados naturales, fresas locas y exquisitas sodas frutales en Inírida.";
         let announcementMessage = localStorage.getItem(DB_PREFIX + 'announcementMessage') || "¡Ingredientes naturales seleccionados diariamente!";
         let companyNequi = localStorage.getItem(DB_PREFIX + 'companyNequi') || "3213169929";
         let companyBancolombia = localStorage.getItem(DB_PREFIX + 'companyBancolombia') || "76336493613";
 
-        const DELIVERY_ZONES = {
-            'Inírida': 2000,
-            'Invasión': 4000,
-            'Armada o Ejército': 6000
-        };
-        let deliveryZone = 'Inírida';
-
         let products = [];
         let cart = [];
         let selectedCategory = 'Todos';
         let deliveryType = 'Llevar';
         let paymentMethod = 'Nequi';
-
-        function setDeliveryZone(zone) {
-            deliveryZone = zone;
-            updateDrawerTotals();
-        }
 
         const DEFAULT_PRODUCTS = [
             { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Sabores Fresh", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
@@ -420,11 +430,14 @@
 
             const stored = localStorage.getItem(DB_PREFIX + 'products');
             if (stored) {
-                products = JSON.parse(stored);
+                try {
+                    products = JSON.parse(stored);
+                } catch(e) {
+                    products = [];
+                }
             }
             if (!products || products.length === 0) {
                 products = DEFAULT_PRODUCTS;
-                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
             }
 
             buildCategoriesMenu();
