@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Punto Fresh - Heladería Artesanal Soft</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -204,6 +205,14 @@
                     <input type="number" id="cust-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-medium text-fresh-purple outline-none focus:border-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                     
                     <div id="domicilio-fields" class="hidden space-y-2">
+                        <div>
+                            <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">Zona de Domicilio *</label>
+                            <select id="cust-delivery-zone" onchange="setDeliveryZone(this.value)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple text-xs">
+                                <option value="Inírida">Inírida ($2.000)</option>
+                                <option value="Invasión">Invasión ($4.000)</option>
+                                <option value="Armada o Ejército">Armada o Ejército ($6.000)</option>
+                            </select>
+                        </div>
                         <input type="text" id="cust-address" placeholder="Dirección completa del domicilio *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                         <input type="text" id="cust-address-obs" placeholder="Observaciones para llegar a la dirección * (ej. Casa verde)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                     </div>
@@ -234,7 +243,7 @@
                     </div>
                     <div id="drawer-delivery-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Costo Envío:</span>
-                        <span>$2.000</span>
+                        <span id="drawer-delivery-cost">$2.000</span>
                     </div>
                     <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Empaques ($2.000 c/u):</span>
@@ -298,6 +307,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
+        // Mantenemos la versión 1 (V1) tal cual lo solicitaste
         const DB_PREFIX = "PUNTOFRESH_V1_";
         const URL_API = 'https://script.google.com/macros/s/AKfycbysTM3ibc0SDOi9kRKtREYN3MivX-MrVxvyHcj0ULV7LQ5AdgUK_4uWiPqF9J8qoKYV/exec';
 
@@ -345,6 +355,19 @@
         let selectedCategory = 'Todos';
         let deliveryType = 'Llevar';
         let paymentMethod = 'Nequi';
+
+        // Zonas de Domicilio
+        const DELIVERY_ZONES = {
+            'Inírida': 2000,
+            'Invasión': 4000,
+            'Armada o Ejército': 6000
+        };
+        let deliveryZone = 'Inírida';
+
+        function setDeliveryZone(zone) {
+            deliveryZone = zone;
+            updateDrawerTotals();
+        }
 
         const DEFAULT_PRODUCTS = [
             { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Sabores Fresh", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
@@ -703,10 +726,15 @@
 
         function updateDrawerTotals() {
             const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
+            
+            // Fix: No cobrar empaque por toppings/adiciones 
+            const packagedItemsQty = cart.filter(i => {
+                const cat = (i.category || '').toLowerCase();
+                return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
+            }).reduce((s, i) => s + i.quantity, 0);
 
-            const deliveryCost = (deliveryType === 'Domicilio') ? 2000 : 0;
-            const packagingCost = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
+            const deliveryCost = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
+            const packagingCost = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
 
             const total = subtotal + deliveryCost + packagingCost;
 
@@ -718,8 +746,14 @@
 
             if (deliveryType === 'Domicilio') {
                 deliveryRow.classList.remove('hidden');
-                packagingRow.classList.remove('hidden');
-                document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
+                document.getElementById('drawer-delivery-cost').innerText = `$${deliveryCost.toLocaleString()}`;
+                
+                if (packagingCost > 0) {
+                    packagingRow.classList.remove('hidden');
+                    document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
+                } else {
+                    packagingRow.classList.add('hidden');
+                }
             } else {
                 deliveryRow.classList.add('hidden');
                 packagingRow.classList.add('hidden');
@@ -907,10 +941,15 @@
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Enviando a Caja...`;
 
             const rawSubtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
+            
+            // Calculo correcto de empacados (sin toppings extras sueltos)
+            const packagedItemsQty = cart.filter(i => {
+                const cat = (i.category || '').toLowerCase();
+                return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
+            }).reduce((s, i) => s + i.quantity, 0);
 
-            const deliveryFee = (deliveryType === 'Domicilio') ? 2000 : 0;
-            const packagingFee = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
+            const deliveryFee = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
+            const packagingFee = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
             const finalTotal = rawSubtotal + deliveryFee + packagingFee;
 
             const orderId = "PF-WEB-" + Math.floor(1000 + Math.random() * 9000);
@@ -920,7 +959,8 @@
                 clientName: name,
                 clientPhone: phone,
                 delivery: deliveryType,
-                mesa_o_direccion: deliveryType === 'Domicilio' ? `${address} (${addressObs})` : 'Recoge en Local',
+                zona_domicilio: deliveryType === 'Domicilio' ? deliveryZone : 'N/A',
+                mesa_o_direccion: deliveryType === 'Domicilio' ? `[${deliveryZone}] ${address} (${addressObs})` : 'Recoge en Local',
                 payment: paymentMethod,
                 items: [...cart],
                 total: finalTotal,
@@ -991,6 +1031,8 @@
                 msg += `* ${item.quantity}x ${item.name}\n`;
             });
             msg += `------------------------------------\n`;
+            if (empaque > 0) msg += `Empaques: $${empaque.toLocaleString()}\n`;
+            if (delivery > 0) msg += `Domicilio (${order.zona_domicilio || 'Inírida'}): $${delivery.toLocaleString()}\n`;
             msg += `Total Pedido: $${total.toLocaleString()}\n`;
             msg += `------------------------------------\n`;
             
@@ -1062,4 +1104,3 @@
     </script>
 </body>
 </html>
-
