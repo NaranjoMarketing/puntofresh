@@ -194,8 +194,8 @@
                 <p class="font-bold uppercase text-neutral-500 tracking-wider text-[10px]">Información de Despacho</p>
                 
                 <div class="grid grid-cols-2 gap-2">
-                    <button onclick="setDeliveryType('Recoger')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
-                        <i class="fa-solid fa-store block text-center mb-0.5 text-xs"></i> Recoger en el local
+                    <button onclick="setDeliveryType('Llevar')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
+                        <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Llevar / Recoger
                     </button>
                     <button onclick="setDeliveryType('Domicilio')" id="del-type-domicilio" class="py-2.5 rounded-xl font-bold border text-center transition-all">
                         <i class="fa-solid fa-motorcycle block text-center mb-0.5 text-xs"></i> Domicilio
@@ -366,7 +366,7 @@
         let products = [];
         let cart = [];
         let selectedCategory = 'Todos';
-        let deliveryType = 'Recoger';
+        let deliveryType = 'Llevar';
         let paymentMethod = 'Nequi';
 
         function setDeliveryZone(zone) {
@@ -430,7 +430,7 @@
             buildCategoriesMenu();
             renderSpecials();
             renderProducts();
-            setDeliveryType('Recoger');
+            setDeliveryType('Llevar');
             setPaymentMethod('Nequi');
             updateCartBadge();
             
@@ -732,15 +732,14 @@
         function updateDrawerTotals() {
             const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
 
-            // Empaque solo aplica a productos, no a adiciones o toppings
+            // Empaque solo aplica a productos principales, omitiendo toppings o adiciones puras
             const packagedItemsQty = cart.filter(i => {
                 const cat = (i.category || '').toLowerCase();
                 return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
             }).reduce((s, i) => s + i.quantity, 0);
 
-            // Se cobra estrictamente la tarifa correspondiente a la zona seleccionada
-            const deliveryCost = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
-            const packagingCost = packagedItemsQty * 2000;
+            const deliveryCost = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 2000) : 0;
+            const packagingCost = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
 
             const total = subtotal + deliveryCost + packagingCost;
 
@@ -752,15 +751,17 @@
 
             if (deliveryType === 'Domicilio') {
                 deliveryRow.classList.remove('hidden');
-                document.getElementById('drawer-delivery-cost').innerText = `$${deliveryCost.toLocaleString()}`;
+                const deliveryCostEl = document.getElementById('drawer-delivery-cost');
+                if (deliveryCostEl) deliveryCostEl.innerText = `$${deliveryCost.toLocaleString()}`;
+                
+                if (packagingCost > 0) {
+                    packagingRow.classList.remove('hidden');
+                    document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
+                } else {
+                    packagingRow.classList.add('hidden');
+                }
             } else {
                 deliveryRow.classList.add('hidden');
-            }
-
-            if (packagingCost > 0) {
-                packagingRow.classList.remove('hidden');
-                document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
-            } else {
                 packagingRow.classList.add('hidden');
             }
         }
@@ -881,7 +882,8 @@
 
         function setDeliveryType(type) {
             deliveryType = type;
-            document.getElementById('del-type-llevar').className = type === 'Recoger' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
+            const isLlevar = (type === 'Llevar' || type === 'Recoger');
+            document.getElementById('del-type-llevar').className = isLlevar ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
             document.getElementById('del-type-domicilio').className = type === 'Domicilio' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
 
             const domicilioFields = document.getElementById('domicilio-fields');
@@ -952,9 +954,8 @@
                 return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
             }).reduce((s, i) => s + i.quantity, 0);
 
-            // Se calcula únicamente la tarifa de la zona seleccionada
-            const deliveryFee = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
-            const packagingFee = packagedItemsQty * 2000;
+            const deliveryFee = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 2000) : 0;
+            const packagingFee = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
             const finalTotal = rawSubtotal + deliveryFee + packagingFee;
 
             const orderId = "PF-WEB-" + Math.floor(1000 + Math.random() * 9000);
@@ -1018,7 +1019,6 @@
                 showToast("Pedido guardado localmente. Redirigiendo a WhatsApp...", "info");
             }
 
-            // Cambiar de ubicación directamente para abrir WhatsApp sin bloquear la red
             setTimeout(() => {
                 window.location.href = waUrl;
             }, 600);
