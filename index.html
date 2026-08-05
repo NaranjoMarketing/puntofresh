@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Punto Fresh - Heladería Artesanal Soft</title>
-    
-    <!-- External Libraries & Fonts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Playfair+Display:ital,wght=0,400;0,700;1,400&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     
@@ -207,14 +204,6 @@
                     <input type="number" id="cust-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-medium text-fresh-purple outline-none focus:border-fresh-purple [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                     
                     <div id="domicilio-fields" class="hidden space-y-2">
-                        <div>
-                            <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">Zona de Domicilio *</label>
-                            <select id="cust-delivery-zone" onchange="setDeliveryZone(this.value)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple text-xs">
-                                <option value="Inírida">Inírida ($2.000)</option>
-                                <option value="Invasión">Invasión ($4.000)</option>
-                                <option value="Armada o Ejército">Armada o Ejército ($6.000)</option>
-                            </select>
-                        </div>
                         <input type="text" id="cust-address" placeholder="Dirección completa del domicilio *" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                         <input type="text" id="cust-address-obs" placeholder="Observaciones para llegar a la dirección * (ej. Casa verde)" class="w-full bg-white border border-fresh-pink/20 py-2.5 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
                     </div>
@@ -245,7 +234,7 @@
                     </div>
                     <div id="drawer-delivery-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Costo Envío:</span>
-                        <span id="drawer-delivery-cost">$2.000</span>
+                        <span>$2.000</span>
                     </div>
                     <div id="drawer-packaging-row" class="hidden flex justify-between text-xs text-neutral-500">
                         <span>Empaques ($2.000 c/u):</span>
@@ -309,54 +298,28 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const DB_PREFIX = "PUNTOFRESH_V2_";
+        const DB_PREFIX = "PUNTOFRESH_V1_";
         const URL_API = 'https://script.google.com/macros/s/AKfycbysTM3ibc0SDOi9kRKtREYN3MivX-MrVxvyHcj0ULV7LQ5AdgUK_4uWiPqF9J8qoKYV/exec';
 
         function removeAccents(str) {
             return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         }
 
-        // Sanitizador quirúrgico para corregir errores 404 de URLs relativas
-        function sanitizeImageUrl(url) {
-            if (!url) return "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
-            if (url === "punto-fresh-toppings.png" || !url.startsWith("http")) {
-                return "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
-            }
-            return url;
-        }
-
         async function loadDataFromCloud() {
             try {
                 if (!URL_API || URL_API.includes("REEMPLAZAR")) return;
                 
-                // Parámetro anti-caché para forzar la descarga en tiempo real
-                const fetchUrl = URL_API + (URL_API.includes('?') ? '&' : '?') + 't=' + Date.now();
-                const response = await fetch(fetchUrl);
+                const response = await fetch(URL_API);
                 const data = await response.json();
                 
                 if(data) {
-                    let fetchedProducts = [];
-                    if (Array.isArray(data)) {
-                        fetchedProducts = data;
-                    } else if (data.products && Array.isArray(data.products)) {
-                        fetchedProducts = data.products;
-                    }
-
-                    if(fetchedProducts.length > 0) {
-                        products = fetchedProducts.map(p => ({
-                            ...p,
-                            img: sanitizeImageUrl(p.img)
-                        }));
+                    if(data.products && data.products.length > 0) {
+                        products = data.products;
                         localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
                     }
                     if(data.config) {
                         if(data.config.company_phone) companyPhone = data.config.company_phone;
-                        if(data.config.main_banner_img) {
-                            mainBannerImg = sanitizeImageUrl(data.config.main_banner_img);
-                            localStorage.setItem(DB_PREFIX + 'mainBannerImg', mainBannerImg);
-                            const imgEl = document.getElementById('banner-img-display');
-                            if (imgEl) imgEl.src = mainBannerImg;
-                        }
+                        if(data.config.main_banner_img) mainBannerImg = data.config.main_banner_img;
                     }
                 }
             } catch (err) {
@@ -370,8 +333,7 @@
 
         let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
         let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros";
-        let storedBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg');
-        let mainBannerImg = sanitizeImageUrl(storedBannerImg);
+        let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://i.postimg.cc/mD8zG07C/punto-fresh-toppings.png";
         let bannerTitle = localStorage.getItem(DB_PREFIX + 'bannerTitle') || "Refresca y endulza tu vida";
         let bannerDesc = localStorage.getItem(DB_PREFIX + 'bannerDesc') || "Disfruta de nuestros espectaculares helados soft creados con ingredientes de la más alta calidad, granizados naturales, fresas locas y exquisitas sodas frutales en Inírida.";
         let announcementMessage = localStorage.getItem(DB_PREFIX + 'announcementMessage') || "¡Ingredientes naturales seleccionados diariamente!";
@@ -430,14 +392,11 @@
 
             const stored = localStorage.getItem(DB_PREFIX + 'products');
             if (stored) {
-                try {
-                    products = JSON.parse(stored);
-                } catch(e) {
-                    products = [];
-                }
+                products = JSON.parse(stored);
             }
             if (!products || products.length === 0) {
                 products = DEFAULT_PRODUCTS;
+                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
             }
 
             buildCategoriesMenu();
@@ -744,15 +703,10 @@
 
         function updateDrawerTotals() {
             const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
 
-            // Empaque solo aplica a productos principales, omitiendo toppings o adiciones puras
-            const packagedItemsQty = cart.filter(i => {
-                const cat = (i.category || '').toLowerCase();
-                return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
-            }).reduce((s, i) => s + i.quantity, 0);
-
-            const deliveryCost = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 2000) : 0;
-            const packagingCost = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
+            const deliveryCost = (deliveryType === 'Domicilio') ? 2000 : 0;
+            const packagingCost = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
 
             const total = subtotal + deliveryCost + packagingCost;
 
@@ -764,15 +718,8 @@
 
             if (deliveryType === 'Domicilio') {
                 deliveryRow.classList.remove('hidden');
-                const deliveryCostEl = document.getElementById('drawer-delivery-cost');
-                if (deliveryCostEl) deliveryCostEl.innerText = `$${deliveryCost.toLocaleString()}`;
-                
-                if (packagingCost > 0) {
-                    packagingRow.classList.remove('hidden');
-                    document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
-                } else {
-                    packagingRow.classList.add('hidden');
-                }
+                packagingRow.classList.remove('hidden');
+                document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
             } else {
                 deliveryRow.classList.add('hidden');
                 packagingRow.classList.add('hidden');
@@ -895,8 +842,7 @@
 
         function setDeliveryType(type) {
             deliveryType = type;
-            const isLlevar = (type === 'Llevar' || type === 'Recoger');
-            document.getElementById('del-type-llevar').className = isLlevar ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
+            document.getElementById('del-type-llevar').className = type === 'Llevar' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
             document.getElementById('del-type-domicilio').className = type === 'Domicilio' ? "py-2.5 rounded-xl font-bold text-[10px] bg-fresh-purple text-white border-2 border-fresh-pink/20" : "py-2.5 rounded-xl font-bold text-[10px] bg-white border border-fresh-pink/15 text-fresh-dark hover:bg-neutral-50";
 
             const domicilioFields = document.getElementById('domicilio-fields');
@@ -961,14 +907,10 @@
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Enviando a Caja...`;
 
             const rawSubtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
-            
-            const packagedItemsQty = cart.filter(i => {
-                const cat = (i.category || '').toLowerCase();
-                return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
-            }).reduce((s, i) => s + i.quantity, 0);
+            const totalItemsQty = cart.reduce((s, i) => s + i.quantity, 0);
 
-            const deliveryFee = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 2000) : 0;
-            const packagingFee = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
+            const deliveryFee = (deliveryType === 'Domicilio') ? 2000 : 0;
+            const packagingFee = (deliveryType === 'Domicilio') ? (totalItemsQty * 2000) : 0;
             const finalTotal = rawSubtotal + deliveryFee + packagingFee;
 
             const orderId = "PF-WEB-" + Math.floor(1000 + Math.random() * 9000);
@@ -978,8 +920,7 @@
                 clientName: name,
                 clientPhone: phone,
                 delivery: deliveryType,
-                zona_domicilio: deliveryType === 'Domicilio' ? deliveryZone : 'N/A',
-                mesa_o_direccion: deliveryType === 'Domicilio' ? `[${deliveryZone}] ${address} (${addressObs})` : 'Recoge en Local',
+                mesa_o_direccion: deliveryType === 'Domicilio' ? `${address} (${addressObs})` : 'Recoge en Local',
                 payment: paymentMethod,
                 items: [...cart],
                 total: finalTotal,
@@ -1032,6 +973,7 @@
                 showToast("Pedido guardado localmente. Redirigiendo a WhatsApp...", "info");
             }
 
+            // Cambiar de ubicación directamente para abrir WhatsApp sin bloquear la red
             setTimeout(() => {
                 window.location.href = waUrl;
             }, 600);
@@ -1049,8 +991,6 @@
                 msg += `* ${item.quantity}x ${item.name}\n`;
             });
             msg += `------------------------------------\n`;
-            if (empaque > 0) msg += `Empaques: $${empaque.toLocaleString()}\n`;
-            if (delivery > 0) msg += `Domicilio (${order.zona_domicilio || 'Inírida'}): $${delivery.toLocaleString()}\n`;
             msg += `Total Pedido: $${total.toLocaleString()}\n`;
             msg += `------------------------------------\n`;
             
@@ -1122,3 +1062,4 @@
     </script>
 </body>
 </html>
+
