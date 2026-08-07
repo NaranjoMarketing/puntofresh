@@ -193,7 +193,7 @@
                 
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="setDeliveryType('Llevar')" id="del-type-llevar" class="py-2.5 rounded-xl font-bold border text-center transition-all">
-                        <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Llevar / Recoger
+                        <i class="fa-solid fa-bag-shopping block text-center mb-0.5 text-xs"></i> Recoger en el local
                     </button>
                     <button onclick="setDeliveryType('Domicilio')" id="del-type-domicilio" class="py-2.5 rounded-xl font-bold border text-center transition-all">
                         <i class="fa-solid fa-motorcycle block text-center mb-0.5 text-xs"></i> Domicilio
@@ -734,7 +734,7 @@
             }).reduce((s, i) => s + i.quantity, 0);
 
             const deliveryCost = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
-            const packagingCost = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
+            const packagingCost = packagedItemsQty * 2000;
 
             const total = subtotal + deliveryCost + packagingCost;
 
@@ -747,15 +747,14 @@
             if (deliveryType === 'Domicilio') {
                 deliveryRow.classList.remove('hidden');
                 document.getElementById('drawer-delivery-cost').innerText = `$${deliveryCost.toLocaleString()}`;
-                
-                if (packagingCost > 0) {
-                    packagingRow.classList.remove('hidden');
-                    document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
-                } else {
-                    packagingRow.classList.add('hidden');
-                }
             } else {
                 deliveryRow.classList.add('hidden');
+            }
+
+            if (packagingCost > 0) {
+                packagingRow.classList.remove('hidden');
+                document.getElementById('drawer-packaging-cost').innerText = `$${packagingCost.toLocaleString()}`;
+            } else {
                 packagingRow.classList.add('hidden');
             }
         }
@@ -949,7 +948,7 @@
             }).reduce((s, i) => s + i.quantity, 0);
 
             const deliveryFee = (deliveryType === 'Domicilio') ? (DELIVERY_ZONES[deliveryZone] || 0) : 0;
-            const packagingFee = (deliveryType === 'Domicilio') ? (packagedItemsQty * 2000) : 0;
+            const packagingFee = packagedItemsQty * 2000;
             const finalTotal = rawSubtotal + deliveryFee + packagingFee;
 
             const orderId = "PF-WEB-" + Math.floor(1000 + Math.random() * 9000);
