@@ -160,8 +160,8 @@
 
             <p class="text-[10px] md:text-xs text-neutral-400 font-light tracking-wide">
                 Plataforma desarrollada por <span class="font-bold text-white">JrNaranjo</span> | 
-                <a href="https://wa.me/573102881717" target="_blank" class="hover:text-fresh-pink transition duration-200 inline-flex items-center gap-1 font-semibold">
-                    <i class="fa-brands fa-whatsapp text-emerald-400 text-sm"></i> WhatsApp: 3102881717
+                <a href="https://wa.me/573213169929" target="_blank" class="hover:text-fresh-pink transition duration-200 inline-flex items-center gap-1 font-semibold">
+                    <i class="fa-brands fa-whatsapp text-emerald-400 text-sm"></i> WhatsApp: 3213169929
                 </a>
             </p>
         </div>
@@ -229,6 +229,7 @@
                     </div>
                 </div>
 
+                <!-- Campo para vuelto en efectivo reconectado en el DOM -->
                 <div id="cash-change-field" class="hidden">
                     <label class="block font-bold text-neutral-500 text-[10px] uppercase mb-1">¿Con cuánto billete vas a cancelar? *</label>
                     <input type="text" id="cust-cash-bill" placeholder="Ej: Pago con billete de $50.000" class="w-full bg-white border border-fresh-pink/20 py-2 px-3 rounded-lg font-semibold text-fresh-purple outline-none focus:border-fresh-purple">
@@ -307,7 +308,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // Mantenemos la versión 1 (V1) tal cual lo solicitaste
         const DB_PREFIX = "PUNTOFRESH_V1_";
         const URL_API = 'https://script.google.com/macros/s/AKfycbysTM3ibc0SDOi9kRKtREYN3MivX-MrVxvyHcj0ULV7LQ5AdgUK_4uWiPqF9J8qoKYV/exec';
 
@@ -341,7 +341,7 @@
             renderProducts();
         }
 
-        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
+        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3213169929";
         let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros";
         let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://i.postimg.cc/gJh7rF9x/imagen-punto-fresh-nativos.png";
         let bannerTitle = localStorage.getItem(DB_PREFIX + 'bannerTitle') || "Refresca y endulza tu vida";
@@ -356,7 +356,6 @@
         let deliveryType = 'Llevar';
         let paymentMethod = 'Nequi';
 
-        // Zonas de Domicilio
         const DELIVERY_ZONES = {
             'Inírida': 2000,
             'Invasión': 4000,
@@ -727,7 +726,6 @@
         function updateDrawerTotals() {
             const subtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
             
-            // Fix: No cobrar empaque por toppings/adiciones 
             const packagedItemsQty = cart.filter(i => {
                 const cat = (i.category || '').toLowerCase();
                 return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
@@ -895,10 +893,12 @@
             document.getElementById('pay-trans').className = method === 'Transferencia' ? "py-2 rounded-xl font-bold border-2 border-fresh-purple bg-fresh-lightPurple text-fresh-purple" : "py-2 rounded-xl font-bold border text-neutral-500 bg-white hover:bg-neutral-50";
 
             const cashChangeField = document.getElementById('cash-change-field');
-            if (method === 'Efectivo') {
-                cashChangeField.classList.remove('hidden');
-            } else {
-                cashChangeField.classList.add('hidden');
+            if (cashChangeField) {
+                if (method === 'Efectivo') {
+                    cashChangeField.classList.remove('hidden');
+                } else {
+                    cashChangeField.classList.add('hidden');
+                }
             }
         }
 
@@ -915,7 +915,8 @@
             const address = document.getElementById('cust-address').value.trim();
             const addressObs = document.getElementById('cust-address-obs').value.trim();
             
-            const cashBill = document.getElementById('cust-cash-bill').value.trim();
+            const cashBillInput = document.getElementById('cust-cash-bill');
+            const cashBill = cashBillInput ? cashBillInput.value.trim() : '';
 
             if (!name || !phone) {
                 showToast("Por favor ingresa tu Nombre y Celular.", "error");
@@ -941,7 +942,6 @@
 
             const rawSubtotal = cart.reduce((s, i) => s + (i.price * i.quantity), 0);
             
-            // Calculo correcto de empacados (sin toppings extras sueltos)
             const packagedItemsQty = cart.filter(i => {
                 const cat = (i.category || '').toLowerCase();
                 return !cat.includes('topping') && !cat.includes('adicion') && !cat.includes('adición');
@@ -967,7 +967,6 @@
                 status: 'Pendiente'
             };
 
-            // --- ENVÍO GARANTIZADO Y COMPLETO A FIREBASE ANTES DE REDIRIGIR ---
             let firebaseSaved = false;
             try {
                 await db.collection('pedidos_web').doc(orderId).set(newWebOrder);
@@ -1001,7 +1000,7 @@
             document.getElementById('cust-address').value = '';
             document.getElementById('cust-address-obs').value = '';
             document.getElementById('cust-comment').value = '';
-            document.getElementById('cust-cash-bill').value = '';
+            if (cashBillInput) cashBillInput.value = '';
 
             btn.disabled = false;
             btn.innerHTML = originalBtnText;
@@ -1012,7 +1011,6 @@
                 showToast("Pedido guardado localmente. Redirigiendo a WhatsApp...", "info");
             }
 
-            // Cambiar de ubicación directamente para abrir WhatsApp sin bloquear la red
             setTimeout(() => {
                 window.location.href = waUrl;
             }, 600);
@@ -1064,7 +1062,7 @@
                 renderProducts();
             }
             if (e.key === DB_PREFIX + 'companyPhone') {
-                companyPhone = e.newValue || "3102881717";
+                companyPhone = e.newValue || "3213169929";
             }
             if (e.key === DB_PREFIX + 'companyAddress') {
                 companyAddress = e.newValue || "Calle 21 #9-57, Barrio Comuneros";
@@ -1094,10 +1092,10 @@
                 }
             }
             if (e.key === DB_PREFIX + 'companyNequi') {
-                companyNequi = e.newValue || "3228586808";
+                companyNequi = e.newValue || "3213169929";
             }
             if (e.key === DB_PREFIX + 'companyBancolombia') {
-                companyBancolombia = e.newValue || "71300000087977";
+                companyBancolombia = e.newValue || "76336493613";
             }
         });
     </script>
