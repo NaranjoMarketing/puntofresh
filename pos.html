@@ -635,7 +635,7 @@
                             </div>
                             <div class="flex justify-between text-[10px] font-bold text-neutral-600 mt-1">
                                 <span>Sumado: <span id="pos-mixed-paid-lbl" class="text-emerald-600 font-black">$0</span></span>
-                                <span>Pendiente: <span id="pos-mixed-pending-lbl" class="text-rose-500 font-black">$0</span></span>
+                                <span>Pendiente/Cambio: <span id="pos-mixed-pending-lbl" class="text-rose-500 font-black">$0</span></span>
                             </div>
                         </div>
 
@@ -1186,6 +1186,10 @@
         const restauranteRef = db.collection('sistema').doc('estado_mesas');
         const cashRegisterRef = db.collection('sistema').doc('estado_caja');
 
+        function removeAccents(str) {
+            return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+        }
+
         async function syncToCloud() {
             try {
                 await restauranteRef.set({ mesas: mesas }, { merge: true });
@@ -1195,7 +1199,7 @@
             }
         }
 
-        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3102881717";
+        let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3213169929";
         let companyNIT = localStorage.getItem(DB_PREFIX + 'companyNIT') || "901.754.218-3";
         let companyAddress = localStorage.getItem(DB_PREFIX + 'companyAddress') || "Calle 21 #9-57, Barrio Comuneros - Inírida";
         let mainBannerImg = localStorage.getItem(DB_PREFIX + 'mainBannerImg') || "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=600&auto=format&fit=crop";
@@ -1220,6 +1224,8 @@
         let currentPINAttempt = "";
         let pinSuccessCallback = null;
         let pinCancelCallback = null;
+
+        let isPrintingNow = false;
 
         let cashRegisterState = JSON.parse(localStorage.getItem(DB_PREFIX + 'cashRegisterState')) || {
             active: false,
@@ -1594,11 +1600,12 @@
                     if (cloudState && typeof cloudState.active === 'boolean') {
                         cashRegisterState = cloudState;
                         localStorage.setItem(DB_PREFIX + 'cashRegisterState', JSON.stringify(cashRegisterState));
-                        updateCashRegisterUI();
                     }
                 }
+                updateCashRegisterUI();
             }, (error) => {
                 console.warn("Estado de caja cargado desde almacenamiento local.");
+                updateCashRegisterUI();
             });
 
             restauranteRef.onSnapshot((doc) => {
@@ -1682,6 +1689,9 @@
                         if(data.expenses) expenses = data.expenses;
                         if(data.purchases) purchasesHistory = data.purchases;
                         if(data.clients) clients = data.clients;
+
+                        companyPhone = "3213169929"; 
+                        localStorage.setItem(DB_PREFIX + 'companyPhone', companyPhone);
 
                         if(data.orders && Array.isArray(data.orders)) {
                             const localClosedMap = new Map();
@@ -1771,6 +1781,8 @@
             const subtitle = document.getElementById('cash-status-subtitle');
             const actions = document.getElementById('cash-status-actions');
             const lockOverlay = document.getElementById('pos-billing-lock-overlay');
+
+            if (!iconContainer || !title || !subtitle || !actions || !lockOverlay) return;
 
             if (cashRegisterState.active) {
                 iconContainer.className = "w-10 h-10 rounded-full flex items-center justify-center text-lg bg-emerald-100 text-emerald-600";
@@ -1919,14 +1931,14 @@
                 if (c.transactions) {
                     c.transactions.forEach(t => {
                         if (t.type === 'payment' && t.closed !== true) {
-                            expectedAbonos += t.amount;
+                            expectedAbonos += (parseInt(t.amount) || 0);
                         }
                     });
                 }
             });
 
-            expectedExpenses = expenses.filter(e => e.closed !== true).reduce((s, e) => s + e.val, 0);
-            expectedAdjustments = cashAdjustments.filter(a => a.closed !== true).reduce((s, a) => s + (a.type === 'In' ? a.amount : -a.amount), 0);
+            expectedExpenses = expenses.filter(e => e.closed !== true).reduce((s, e) => s + (parseInt(e.val) || 0), 0);
+            expectedAdjustments = cashAdjustments.filter(a => a.closed !== true).reduce((s, a) => s + (a.type === 'In' ? (parseInt(a.amount) || 0) : -(parseInt(a.amount) || 0)), 0);
 
             expectedCash = cashRegisterState.openingBalance + expectedEfectivoSales + expectedAbonos - expectedExpenses + expectedAdjustments;
 
@@ -2149,6 +2161,9 @@
         }
 
         function printCierreTicket(report) {
+            if (isPrintingNow) return;
+            isPrintingNow = true;
+
             const printArea = document.getElementById('print-receipt-area');
             let catRows = Object.keys(report.categorias).map(cat => `
                 <tr style="border-bottom: 1px dashed #ddd;">
@@ -2233,6 +2248,7 @@
                 window.print();
                 document.body.classList.remove('printing-mode');
                 printArea.classList.add('hidden');
+                isPrintingNow = false;
             }, 300);
         }
 
@@ -2355,8 +2371,12 @@
         }
 
         function selectPOSMesa(id) {
-            const m = mesas.find(x => x.id === id);
+            let m = mesas.find(x => x.id === id);
+            if(!m) {
+                m = mesas.find(x => removeAccents(x.name.toLowerCase().trim()) === removeAccents(String(id).toLowerCase().trim()));
+            }
             if(!m) return;
+
             document.getElementById('pos-selected-table-id').value = m.id;
             document.getElementById('pos-client-name').value = m.label;
             
@@ -2394,8 +2414,12 @@
 
         function renderPOSProducts() {
             const grid = document.getElementById('pos-grid'); grid.innerHTML = '';
-            const search = document.getElementById('pos-search').value.toLowerCase();
-            let filtered = products.filter(p => (p.active !== false && p.active !== "false") && (p.name.toLowerCase().includes(search) || p.category.toLowerCase().includes(search)));
+            const searchClean = removeAccents(document.getElementById('pos-search').value.toLowerCase());
+            let filtered = products.filter(p => {
+                const nameClean = removeAccents((p.name || '').toLowerCase());
+                const catClean = removeAccents((p.category || '').toLowerCase());
+                return (p.active !== false && p.active !== "false") && (nameClean.includes(searchClean) || catClean.includes(searchClean));
+            });
             if (filtered.length === 0) {
                 grid.innerHTML = `<div class="col-span-full text-center py-6 text-neutral-400 text-xs font-bold">No hay productos disponibles para esta búsqueda o categoría.</div>`;
                 return;
@@ -2584,15 +2608,22 @@
             const mNequi = parseInt(document.getElementById('pos-mixed-nequi').value) || 0;
 
             const sumPaid = mCash + mTrans + mNequi;
-            const pending = Math.max(0, total - sumPaid);
+            const pending = total - sumPaid;
 
             document.getElementById('pos-mixed-paid-lbl').innerText = `$${sumPaid.toLocaleString()}`;
-            document.getElementById('pos-mixed-pending-lbl').innerText = `$${pending.toLocaleString()}`;
 
-            if(pending === 0 && sumPaid > 0) {
-                document.getElementById('pos-mixed-pending-lbl').className = "text-emerald-600 font-black";
+            const pendingLbl = document.getElementById('pos-mixed-pending-lbl');
+            if (pending <= 0) {
+                const change = Math.abs(pending);
+                if (change > 0) {
+                    pendingLbl.innerText = `Devolución: $${change.toLocaleString()}`;
+                } else {
+                    pendingLbl.innerText = "$0 (Cuadrado)";
+                }
+                pendingLbl.className = "text-emerald-600 font-black";
             } else {
-                document.getElementById('pos-mixed-pending-lbl').className = "text-rose-500 font-black";
+                pendingLbl.innerText = `Faltan: $${pending.toLocaleString()}`;
+                pendingLbl.className = "text-rose-500 font-black";
             }
         }
 
@@ -2718,6 +2749,12 @@
                     table.waiter = "";
                     table.comment = "";
                 }
+            } else {
+                const cajaTable = mesas.find(m => m.id === 'MESA_CAJA');
+                if (cajaTable) {
+                    cajaTable.items = [];
+                    cajaTable.status = 'Libre';
+                }
             }
 
             posCart.forEach(item => {
@@ -2783,10 +2820,18 @@
                 </div>`;
 
             previewContainer.innerHTML = receiptHTML;
+            previewContainer.dataset.receiptHtml = receiptHTML;
 
-            document.getElementById('btn-print-preview-modal').onclick = function() {
+            const printBtn = document.getElementById('btn-print-preview-modal');
+            printBtn.onclick = function() {
+                if (isPrintingNow) return;
+                isPrintingNow = true;
+                printBtn.disabled = true;
+
+                const currentReceiptHTML = previewContainer.dataset.receiptHtml || receiptHTML;
+
                 const printArea = document.getElementById('print-receipt-area');
-                printArea.innerHTML = receiptHTML;
+                printArea.innerHTML = currentReceiptHTML;
                 printArea.classList.remove('hidden');
                 document.body.classList.add('printing-mode');
 
@@ -2794,6 +2839,8 @@
                     window.print();
                     document.body.classList.remove('printing-mode');
                     printArea.classList.add('hidden');
+                    isPrintingNow = false;
+                    printBtn.disabled = false;
                 }, 300);
             };
 
@@ -3253,7 +3300,8 @@
         function processPastDebt() {
             if (!currentSelectedClient) return;
             const amount = parseInt(document.getElementById('past-debt-amount').value);
-            const note = document.getElementById('past-debt-note').value.trim() || "Deuda Registrada (Anterior)";
+            const userNote = document.getElementById('past-debt-note').value.trim();
+            const note = userNote ? userNote + " (Deuda Anterior)" : "Deuda Registrada (Anterior)";
 
             if (isNaN(amount) || amount <= 0) {
                 showToast("Ingresa un monto válido.", "error");
@@ -3264,10 +3312,11 @@
 
             currentSelectedClient.transactions.push({
                 id: "PAS-" + Math.floor(1000 + Math.random() * 9000),
-                date: new Date().toLocaleDateString() + " (Anterior)",
+                date: new Date().toLocaleString(),
                 type: 'invoice',
                 total: amount,
                 note: note,
+                isLegacy: true,
                 closed: true
             });
 
@@ -3318,7 +3367,21 @@
             const price = parseInt(document.getElementById('inv-price').value) || 0;
             const stock = parseInt(document.getElementById('inv-stock').value) || 0;
             const isSpecial = document.getElementById('inv-is-special').checked;
-            const isActive = document.getElementById('inv-is-active') ? document.getElementById('inv-is-active').checked : true;
+
+            let existingProduct = null;
+            let finalId = id;
+            if (id && id !== "") {
+                existingProduct = products.find(p => String(p.id).trim() === String(id).trim());
+            }
+
+            const activeCheckbox = document.getElementById('inv-is-active');
+            let isActive = true;
+            if (activeCheckbox) {
+                isActive = activeCheckbox.checked;
+            } else if (existingProduct && existingProduct.active !== undefined) {
+                isActive = (existingProduct.active !== false && existingProduct.active !== "false");
+            }
+
             let img = document.getElementById('inv-img-base64').value || "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=400&auto=format&fit=crop";
             let portion = document.getElementById('inv-portion').value || "N/A";
 
@@ -3327,11 +3390,6 @@
                 return;
             }
 
-            let existingProduct = null;
-            let finalId = id;
-            if (id && id !== "") {
-                existingProduct = products.find(p => String(p.id).trim() === String(id).trim());
-            }
             if (!finalId || finalId === "") {
                 finalId = getDeterministicId(name);
             }
@@ -3491,9 +3549,15 @@
         }
 
         function saveExpense() {
-            const desc = document.getElementById('expense-desc').value;
-            const val = parseInt(document.getElementById('expense-value').value);
-            if(!desc || isNaN(val)) return;
+            const desc = document.getElementById('expense-desc').value.trim();
+            const rawVal = document.getElementById('expense-value').value;
+            const val = parseInt(rawVal);
+
+            if(!desc || isNaN(val) || val <= 0) {
+                showToast("Por favor ingresa un concepto y valor numérico válido para el gasto.", "error");
+                return;
+            }
+
             let e = { date: new Date().toLocaleDateString(), desc, val, closed: false };
             expenses.push(e); sincronizarConGoogle("saveExpense", e); saveState();
             document.getElementById('expense-desc').value = '';
@@ -3505,17 +3569,20 @@
         function renderExpenses() {
             const tbody = document.getElementById('expenses-rows'); tbody.innerHTML = '';
             [...expenses].reverse().forEach(e => {
+                let displayVal = parseInt(e.val) || 0;
                 tbody.innerHTML += `
                     <tr class="border-b text-xs">
                         <td class="py-2">${e.date}</td>
                         <td>${e.desc} ${e.closed ? '<span class="text-[9px] bg-neutral-200 px-1 py-0.5 rounded ml-1">Arqueado</span>' : ''}</td>
-                        <td class="text-right text-red-600 font-bold">$${e.val.toLocaleString()}</td>
+                        <td class="text-right text-red-600 font-bold">$${displayVal.toLocaleString()}</td>
                     </tr>`;
             });
         }
 
         function saveCompanySettings() {
-            companyPhone = document.getElementById('settings-phone').value;
+            let phoneInput = document.getElementById('settings-phone').value.trim();
+            companyPhone = phoneInput ? phoneInput : "3213169929";
+
             companyNIT = document.getElementById('settings-nit').value;
             mainBannerImg = document.getElementById('settings-main-banner-img').value;
             companyAddress = document.getElementById('settings-address').value;
@@ -3628,7 +3695,7 @@
                 o.items.forEach(i => {
                     let prod = products.find(p => String(p.id).trim() === String(i.id).trim());
                     let catName = prod ? prod.category : "General / Varios";
-                    if (prod) cost += (prod.cost * i.quantity);
+                    if (prod) cost += ((parseInt(prod.cost) || 0) * i.quantity);
 
                     if (!categoryStats[catName]) {
                         categoryStats[catName] = { qty: 0, total: 0 };
@@ -3638,7 +3705,7 @@
                 });
             });
 
-            filteredExpenses.forEach(e => { exp += e.val; });
+            filteredExpenses.forEach(e => { exp += (parseInt(e.val) || 0); });
 
             document.getElementById('metric-revenue').innerText = `$${rev.toLocaleString()}`;
             document.getElementById('metric-cost').innerText = `$${cost.toLocaleString()}`;
@@ -3822,7 +3889,7 @@
             });
 
             const encodedUri = encodeURI(csvContent);
-            const link = document.getElementById("a") || document.createElement("a");
+            const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
             link.setAttribute("download", `Reporte_Contable_${new Date().toLocaleDateString()}.csv`);
             document.body.appendChild(link);
@@ -3874,52 +3941,56 @@
             updateAdminLockHeaderButton();
         }
 
+        let storageTimeout = null;
         window.addEventListener('storage', function(e) {
-            if (e.key === DB_PREFIX + 'products') {
-                products = JSON.parse(e.newValue || '[]');
-                sanitizeProducts(); 
-                updateCategorySelect();
-                renderInventory();
-                renderPOSProducts();
-            }
-            if (e.key === DB_PREFIX + 'mesas_v2') {
-                let rawMesas = JSON.parse(e.newValue || '[]');
-                const uniqueMap = new Map();
-                rawMesas.forEach(m => {
-                    if (!m || !m.name) return;
-                    const key = m.name.trim().toLowerCase();
-                    if (!uniqueMap.has(key)) {
-                        uniqueMap.set(key, m);
-                    }
-                });
-                mesas = Array.from(uniqueMap.values());
-                renderBillingTables();
-                populatePOSTableSelect();
-            }
-            if (e.key === DB_PREFIX + 'pendingWebOrders') {
-                pendingWebOrders = JSON.parse(e.newValue || '[]');
-                renderWebOrdersPOS();
-            }
-            if (e.key === DB_PREFIX + 'clients') {
-                clients = JSON.parse(e.newValue || '[]');
-                renderClientsList();
-                populatePOSClientSelect();
-            }
-            if (e.key === DB_PREFIX + 'orders') {
-                orders = JSON.parse(e.newValue || '[]');
-                renderHistory();
-                renderFinances();
-            }
-            if (e.key === DB_PREFIX + 'cashRegisterState') {
-                cashRegisterState = JSON.parse(e.newValue || '{"active":false}');
-                updateCashRegisterUI();
-            }
-            if (e.key === DB_PREFIX + 'cashAdjustments') {
-                cashAdjustments = JSON.parse(e.newValue || '[]');
-            }
-            if (e.key === DB_PREFIX + 'sessionActive') {
-                checkSession();
-            }
+            clearTimeout(storageTimeout);
+            storageTimeout = setTimeout(() => {
+                if (e.key === DB_PREFIX + 'products') {
+                    products = JSON.parse(e.newValue || '[]');
+                    sanitizeProducts(); 
+                    updateCategorySelect();
+                    renderInventory();
+                    renderPOSProducts();
+                }
+                if (e.key === DB_PREFIX + 'mesas_v2') {
+                    let rawMesas = JSON.parse(e.newValue || '[]');
+                    const uniqueMap = new Map();
+                    rawMesas.forEach(m => {
+                        if (!m || !m.name) return;
+                        const key = m.name.trim().toLowerCase();
+                        if (!uniqueMap.has(key)) {
+                            uniqueMap.set(key, m);
+                        }
+                    });
+                    mesas = Array.from(uniqueMap.values());
+                    renderBillingTables();
+                    populatePOSTableSelect();
+                }
+                if (e.key === DB_PREFIX + 'pendingWebOrders') {
+                    pendingWebOrders = JSON.parse(e.newValue || '[]');
+                    renderWebOrdersPOS();
+                }
+                if (e.key === DB_PREFIX + 'clients') {
+                    clients = JSON.parse(e.newValue || '[]');
+                    renderClientsList();
+                    populatePOSClientSelect();
+                }
+                if (e.key === DB_PREFIX + 'orders') {
+                    orders = JSON.parse(e.newValue || '[]');
+                    renderHistory();
+                    renderFinances();
+                }
+                if (e.key === DB_PREFIX + 'cashRegisterState') {
+                    cashRegisterState = JSON.parse(e.newValue || '{"active":false}');
+                    updateCashRegisterUI();
+                }
+                if (e.key === DB_PREFIX + 'cashAdjustments') {
+                    cashAdjustments = JSON.parse(e.newValue || '[]');
+                }
+                if (e.key === DB_PREFIX + 'sessionActive') {
+                    checkSession();
+                }
+            }, 100);
         });
     </script>
 </body>
