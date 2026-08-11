@@ -1465,7 +1465,6 @@
             }
         }
 
-        /* CORRECCIÓN 1: parseLocalDate optimizado para formatos ISO y Google Sheets */
         function parseLocalDate(dateStr) {
             if (!dateStr) return new Date(0);
             if (dateStr instanceof Date) return dateStr;
@@ -1514,7 +1513,6 @@
             return isNaN(fallback.getTime()) ? new Date(0) : fallback;
         }
 
-        /* CORRECCIÓN 2: sanitizeLegacyOpenTransactions para evitar cierre masivo involuntario */
         function sanitizeLegacyOpenTransactions() {
             deduplicateAndSanitizeOrders();
             if (cashRegisterState.active && cashRegisterState.openingTime) {
@@ -1660,6 +1658,7 @@
             loadDataFromCloud();
         }
 
+        /* CORRECCIÓN: Sobrescribe las fechas locales con las originales traídas de la base de datos (Google Sheets) */
         async function loadDataFromCloud() {
             try {
                 if (esUrlDummy()) {
@@ -1809,7 +1808,6 @@
             box.classList.add('scale-95');
         }
 
-        /* CORRECCIÓN 3: confirmApertura para reconectar comprobantes no cerrados */
         function confirmApertura() {
             const amount = parseInt(document.getElementById('apertura-base-amount').value);
             if (isNaN(amount) || amount < 0) {
@@ -1823,7 +1821,6 @@
             cashRegisterState.openingBalance = amount;
             cashRegisterState.openingTime = nowStr;
 
-            // Reactiva y asigna al turno actual todas las órdenes que no hayan sido cerradas formalmente
             orders.forEach(o => {
                 if (!o.cierreId && o.status !== 'Anulado' && o.status !== 'Cancelado') {
                     o.closed = false;
@@ -3764,15 +3761,25 @@
             }
         }
 
+        /* CORRECCIÓN: Convierte cualquier string de fecha ISO o raro a formato limpio en hora local */
         function renderHistory() {
             const tbody = document.getElementById('history-rows'); tbody.innerHTML = '';
             [...orders].reverse().forEach(o => {
                 const isAnulado = o.status === 'Anulado' || o.status === 'Cancelado';
+                
+                let formattedDate = o.date;
+                try {
+                    const d = parseLocalDate(o.date);
+                    if (d && !isNaN(d.getTime()) && d.getTime() > 0) {
+                        formattedDate = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                } catch(e) {}
+
                 tbody.innerHTML += `
                     <tr class="border-b transition hover:bg-neutral-50 text-xs ${isAnulado ? 'bg-red-50/50 opacity-80' : ''}">
                         <td class="py-3 px-2 font-bold text-fresh-purple">${o.id}</td>
                         <td class="py-3 px-2">
-                            ${o.date.split(',')[0]}<br>
+                            ${formattedDate}<br>
                             <span class="text-[9px] font-bold bg-neutral-200 px-1.5 py-0.5 rounded">${o.mesa_o_direccion}</span>
                             ${o.closed ? '<span class="text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded ml-1 font-bold">Cerrado</span>' : '<span class="text-[9px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded ml-1 font-bold">Abierto</span>'}
                         </td>
