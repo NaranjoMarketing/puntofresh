@@ -936,6 +936,15 @@
                 </div>
             </div>
 
+            <!-- BLOQUE DE HISTORIAL DE CIERRES ULTIMOS 5 DÍAS -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-fresh-pink/10">
+                <h3 class="font-serif text-lg font-bold mb-1 text-fresh-purple flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left text-fresh-pink"></i> Historial de Arqueos de los Últimos 5 Días
+                </h3>
+                <p class="text-xs text-neutral-400 mb-4">Revisa y reimprime los comprobantes de caja de jornadas anteriores (Los registros con más de 5 días se depuran automáticamente).</p>
+                <div id="historial-cierres-5dias-container" class="space-y-2 max-h-[250px] overflow-y-auto pr-1"></div>
+            </div>
+
             <div class="bg-white p-4 rounded-2xl border border-fresh-pink/20 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div class="text-xs">
                     <label class="block font-bold text-neutral-500 uppercase mb-1">Fecha Inicial:</label>
@@ -1239,6 +1248,21 @@
         let selectedTableWaiter = "";
         let currentFinanceFilter = null; 
 
+        /* FUNCIÓN AUXILIAR: Mantiene únicamente los últimos 5 días de cierres en la memoria local */
+        function autoPurgeOldCierres() {
+            let cierres = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios')) || [];
+            const now = new Date();
+            const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
+
+            cierres = cierres.filter(c => {
+                const cDate = parseLocalDate(c.date || c.closingTime);
+                return (now.getTime() - cDate.getTime()) <= fiveDaysInMs;
+            });
+
+            localStorage.setItem(DB_PREFIX + 'cierres_diarios', JSON.stringify(cierres));
+            return cierres;
+        }
+
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
             if(!container) return;
@@ -1472,13 +1496,11 @@
             try {
                 const cleanStr = String(dateStr).trim();
                 
-                // Manejo de ISO estándar (ej: 2026-08-11T01:41:18.000Z)
                 if (cleanStr.includes('T')) {
                     const d = new Date(cleanStr);
                     if (!isNaN(d.getTime())) return d;
                 }
 
-                // Manejo de formato Google Sheets (ej: 9/8/2026, 20:18 o 10/8/2026, 14:42:00)
                 const parts = cleanStr.split(/[\s,]+/);
                 if (parts.length >= 1) {
                     const dateBits = parts[0].split('/');
@@ -1574,6 +1596,7 @@
 
         function initApp() {
             checkSession();
+            autoPurgeOldCierres();
             
             cashRegisterRef.onSnapshot((doc) => {
                 if (doc.exists && doc.data().cashRegisterState) {
@@ -1658,7 +1681,6 @@
             loadDataFromCloud();
         }
 
-        /* CORRECCIÓN: Sobrescribe las fechas locales con las originales traídas de la base de datos (Google Sheets) */
         async function loadDataFromCloud() {
             try {
                 if (esUrlDummy()) {
@@ -1731,7 +1753,10 @@
             }
             if(t==='expenses') renderExpenses(); 
             if(t==='history') renderHistory(); 
-            if(t==='finances') renderFinances();
+            if(t==='finances') {
+                renderFinances();
+                renderHistorialCierres5Dias();
+            }
             if(t==='clients') {
                 renderClientsList();
                 populatePOSClientSelect();
@@ -2058,6 +2083,7 @@
             }
         }
 
+        /* CORRECCIÓN: Cierra caja y depura cierres anteriores mayores a 5 días */
         async function confirmCierreCaja() {
             const confirm = await showCustomConfirm("Cerrar Turno de Caja", "¿Estás seguro de efectuar el cierre de caja? Esto archivará las ventas de hoy y cerrará tu sesión por seguridad.");
             if (!confirm) return;
@@ -2097,6 +2123,8 @@
             let cierres = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios')) || [];
             cierres.push(cierreReport);
             localStorage.setItem(DB_PREFIX + 'cierres_diarios', JSON.stringify(cierres));
+
+            autoPurgeOldCierres();
 
             sincronizarConGoogle("saveCierre", cierreReport);
 
@@ -2150,12 +2178,44 @@
             logoutSession();
         }
 
+        /* CORRECCIÓN: Visualización del Historial de Cierres de hasta 5 Días */
+        function renderHistorialCierres5Dias() {
+            const cierres = autoPurgeOldCierres();
+            const container = document.getElementById('historial-cierres-5dias-container');
+            if (!container) return;
+
+            container.innerHTML = '';
+            if (cierres.length === 0) {
+                container.innerHTML = `<p class="text-xs text-neutral-400 text-center py-4">No hay cierres guardados en los últimos 5 días.</p>`;
+                return;
+            }
+
+            cierres.slice().reverse().forEach(c => {
+                const jsonStr = JSON.stringify(c).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                container.innerHTML += `
+                    <div class="bg-neutral-50 p-3 rounded-xl border border-fresh-pink/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs mb-2 shadow-sm">
+                        <div>
+                            <span class="font-black text-fresh-purple">Arqueo #${c.id}</span> 
+                            <span class="text-[10px] bg-fresh-lightPurple text-fresh-purple px-2 py-0.5 rounded font-bold ml-1">${c.date}</span>
+                            <p class="text-[11px] text-neutral-500 mt-1">
+                                Efectivo: <b>$${(c.realCash || 0).toLocaleString()}</b> | 
+                                Transf: <b>$${(c.realTrans || 0).toLocaleString()}</b> | 
+                                Nequi: <b>$${(c.realNequi || 0).toLocaleString()}</b>
+                            </p>
+                        </div>
+                        <button onclick='printCierreTicket(${jsonStr})' class="bg-fresh-purple hover:bg-fresh-dark text-white px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition">
+                            <i class="fa-solid fa-print"></i> Reimprimir Arqueo
+                        </button>
+                    </div>`;
+            });
+        }
+
         function printCierreTicket(report) {
             if (isPrintingNow) return;
             isPrintingNow = true;
 
             const printArea = document.getElementById('print-receipt-area');
-            let catRows = Object.keys(report.categorias).map(cat => `
+            let catRows = Object.keys(report.categorias || {}).map(cat => `
                 <tr style="border-bottom: 1px dashed #ddd;">
                     <td style="padding: 4px 0; font-family: monospace; font-size: 11px;">${cat}</td>
                     <td style="padding: 4px 0; text-align: center; font-family: monospace; font-size: 11px;">${report.categorias[cat].qty} uds</td>
@@ -2182,10 +2242,10 @@
 
                     <div style="border-top: 1px solid black; border-bottom: 1px solid black; padding: 5px 0; margin-bottom: 10px; font-size: 11px;">
                         <table style="width: 100%;">
-                            <tr><td>Base Caja Inicial:</td><td style="text-align:right;">$${report.openingBalance.toLocaleString()}</td></tr>
-                            <tr><td>Abonos Clientes:</td><td style="text-align:right; color:green;">+$${report.abonos.toLocaleString()}</td></tr>
-                            <tr><td>Ajustes Aux. (Flujos):</td><td style="text-align:right;">${report.ajustes >= 0 ? '+' : ''}$${report.ajustes.toLocaleString()}</td></tr>
-                            <tr><td>Ventas Crédito (Infor.):</td><td style="text-align:right;">$${report.ventasCredito.toLocaleString()}</td></tr>
+                            <tr><td>Base Caja Inicial:</td><td style="text-align:right;">$${(report.openingBalance || 0).toLocaleString()}</td></tr>
+                            <tr><td>Abonos Clientes:</td><td style="text-align:right; color:green;">+$${(report.abonos || 0).toLocaleString()}</td></tr>
+                            <tr><td>Ajustes Aux. (Flujos):</td><td style="text-align:right;">${(report.ajustes || 0) >= 0 ? '+' : ''}$${(report.ajustes || 0).toLocaleString()}</td></tr>
+                            <tr><td>Ventas Crédito (Infor.):</td><td style="text-align:right;">$${(report.ventasCredito || 0).toLocaleString()}</td></tr>
                         </table>
                     </div>
 
@@ -2199,25 +2259,25 @@
                         </tr>
                         <tr>
                             <td>Efectivo:</td>
-                            <td style="text-align:right;">$${report.expectedCash.toLocaleString()}</td>
-                            <td style="text-align:right;">$${report.realCash.toLocaleString()}</td>
-                            <td style="text-align:right; font-weight:bold;">$${report.difCash.toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.expectedCash || 0).toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.realCash || 0).toLocaleString()}</td>
+                            <td style="text-align:right; font-weight:bold;">$${(report.difCash || 0).toLocaleString()}</td>
                         </tr>
                         <tr>
                             <td>Transf:</td>
-                            <td style="text-align:right;">$${report.expectedTrans.toLocaleString()}</td>
-                            <td style="text-align:right;">$${report.realTrans.toLocaleString()}</td>
-                            <td style="text-align:right; font-weight:bold;">$${report.difTrans.toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.expectedTrans || 0).toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.realTrans || 0).toLocaleString()}</td>
+                            <td style="text-align:right; font-weight:bold;">$${(report.difTrans || 0).toLocaleString()}</td>
                         </tr>
                         <tr>
                             <td>Nequi:</td>
-                            <td style="text-align:right;">$${report.expectedNequi.toLocaleString()}</td>
-                            <td style="text-align:right;">$${report.realNequi.toLocaleString()}</td>
-                            <td style="text-align:right; font-weight:bold;">$${report.difNequi.toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.expectedNequi || 0).toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.realNequi || 0).toLocaleString()}</td>
+                            <td style="text-align:right; font-weight:bold;">$${(report.difNequi || 0).toLocaleString()}</td>
                         </tr>
                         <tr style="font-weight:bold; border-top:1px dashed black;">
                             <td colspan="3">Descuadre Neto:</td>
-                            <td style="text-align:right;">$${report.difTotal.toLocaleString()}</td>
+                            <td style="text-align:right;">$${(report.difTotal || 0).toLocaleString()}</td>
                         </tr>
                     </table>
 
@@ -3761,7 +3821,6 @@
             }
         }
 
-        /* CORRECCIÓN: Convierte cualquier string de fecha ISO o raro a formato limpio en hora local */
         function renderHistory() {
             const tbody = document.getElementById('history-rows'); tbody.innerHTML = '';
             [...orders].reverse().forEach(o => {
