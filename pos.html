@@ -1465,91 +1465,74 @@
             }
         }
 
+        /* CORRECCIÓN 1: parseLocalDate optimizado para formatos ISO y Google Sheets */
         function parseLocalDate(dateStr) {
             if (!dateStr) return new Date(0);
             if (dateStr instanceof Date) return dateStr;
 
-            let standardParsed = new Date(dateStr);
-            if (!isNaN(standardParsed.getTime())) return standardParsed;
-
             try {
                 const cleanStr = String(dateStr).trim();
-                const [datePart, timePart] = cleanStr.split(/[\s,]+/);
-                if (datePart) {
-                    const parts = datePart.split('/');
-                    if (parts.length === 3) {
-                        const day = parseInt(parts[0], 10);
-                        const month = parseInt(parts[1], 10) - 1;
-                        const year = parseInt(parts[2], 10);
+                
+                // Manejo de ISO estándar (ej: 2026-08-11T01:41:18.000Z)
+                if (cleanStr.includes('T')) {
+                    const d = new Date(cleanStr);
+                    if (!isNaN(d.getTime())) return d;
+                }
+
+                // Manejo de formato Google Sheets (ej: 9/8/2026, 20:18 o 10/8/2026, 14:42:00)
+                const parts = cleanStr.split(/[\s,]+/);
+                if (parts.length >= 1) {
+                    const dateBits = parts[0].split('/');
+                    if (dateBits.length === 3) {
+                        const day = parseInt(dateBits[0], 10);
+                        const month = parseInt(dateBits[1], 10) - 1;
+                        const year = parseInt(dateBits[2], 10);
 
                         let hours = 0, minutes = 0, seconds = 0;
-                        if (timePart) {
-                            const tBits = timePart.split(':');
-                            if (tBits.length >= 2) {
-                                hours = parseInt(tBits[0], 10) || 0;
-                                minutes = parseInt(tBits[1], 10) || 0;
-                                seconds = parseInt(tBits[2], 10) || 0;
-                            }
+                        if (parts[1]) {
+                            const timeBits = parts[1].split(':');
+                            hours = parseInt(timeBits[0], 10) || 0;
+                            minutes = parseInt(timeBits[1], 10) || 0;
+                            seconds = parseInt(timeBits[2], 10) || 0;
                         }
-                        if (cleanStr.toLowerCase().includes('p.m.') || cleanStr.toLowerCase().includes('pm')) {
+
+                        if (cleanStr.toLowerCase().includes('pm') || cleanStr.toLowerCase().includes('p.m.')) {
                             if (hours < 12) hours += 12;
-                        } else if (cleanStr.toLowerCase().includes('a.m.') || cleanStr.toLowerCase().includes('am')) {
+                        } else if (cleanStr.toLowerCase().includes('am') || cleanStr.toLowerCase().includes('a.m.')) {
                             if (hours === 12) hours = 0;
                         }
 
-                        const d = new Date(year, month, day, hours, minutes, seconds);
-                        if (!isNaN(d.getTime())) return d;
+                        const parsedDate = new Date(year, month, day, hours, minutes, seconds);
+                        if (!isNaN(parsedDate.getTime())) return parsedDate;
                     }
                 }
-            } catch(e) {}
-            return new Date(0);
+            } catch (e) {
+                console.warn("Error parseando fecha:", dateStr);
+            }
+
+            const fallback = new Date(dateStr);
+            return isNaN(fallback.getTime()) ? new Date(0) : fallback;
         }
 
+        /* CORRECCIÓN 2: sanitizeLegacyOpenTransactions para evitar cierre masivo involuntario */
         function sanitizeLegacyOpenTransactions() {
             deduplicateAndSanitizeOrders();
             if (cashRegisterState.active && cashRegisterState.openingTime) {
                 const openingTimeMs = parseLocalDate(cashRegisterState.openingTime).getTime();
                 orders.forEach(o => {
-                    const orderTimeMs = parseLocalDate(o.date).getTime();
-                    if (o.closed === undefined || o.closed === false) {
-                        if (orderTimeMs > 0 && openingTimeMs > 0 && orderTimeMs < (openingTimeMs - 60000)) {
+                    if (o.closed === undefined) {
+                        if (o.cierreId) {
                             o.closed = true;
-                        }
-                    }
-                });
-                clients.forEach(c => {
-                    if (c.transactions) {
-                        c.transactions.forEach(t => {
-                            if (t.closed === undefined || t.closed === false) {
-                                const transTimeMs = parseLocalDate(t.date).getTime();
-                                if (transTimeMs > 0 && openingTimeMs > 0 && transTimeMs < (openingTimeMs - 60000)) {
-                                    t.closed = true;
-                                }
+                        } else {
+                            const orderTimeMs = parseLocalDate(o.date).getTime();
+                            if (orderTimeMs > 0 && openingTimeMs > 0 && orderTimeMs < (openingTimeMs - 300000)) {
+                                o.closed = true;
+                            } else {
+                                o.closed = false;
                             }
-                        });
-                    }
-                });
-                expenses.forEach(e => {
-                    if (e.closed === undefined || e.closed === false) {
-                        const expTimeMs = parseLocalDate(e.date).getTime();
-                        if (expTimeMs > 0 && openingTimeMs > 0 && expTimeMs < (openingTimeMs - 60000)) {
-                            e.closed = true;
                         }
                     }
                 });
-                cashAdjustments.forEach(a => {
-                    if (a.closed === undefined || a.closed === false) {
-                        const adjTimeMs = parseLocalDate(a.date).getTime();
-                        if (adjTimeMs > 0 && openingTimeMs > 0 && adjTimeMs < (openingTimeMs - 60000)) {
-                            a.closed = true;
-                        }
-                    }
-                });
-            } else {
-                orders.forEach(o => { o.closed = true; });
-                clients.forEach(c => { if(c.transactions) c.transactions.forEach(t => { t.closed = true; }); });
-                expenses.forEach(e => { e.closed = true; });
-                cashAdjustments.forEach(a => { a.closed = true; });
             }
         }
 
@@ -1826,6 +1809,7 @@
             box.classList.add('scale-95');
         }
 
+        /* CORRECCIÓN 3: confirmApertura para reconectar comprobantes no cerrados */
         function confirmApertura() {
             const amount = parseInt(document.getElementById('apertura-base-amount').value);
             if (isNaN(amount) || amount < 0) {
@@ -1833,15 +1817,24 @@
                 return;
             }
 
-            sanitizeLegacyOpenTransactions();
+            const nowStr = new Date().toLocaleString();
 
             cashRegisterState.active = true;
             cashRegisterState.openingBalance = amount;
-            cashRegisterState.openingTime = new Date().toLocaleString();
-            
+            cashRegisterState.openingTime = nowStr;
+
+            // Reactiva y asigna al turno actual todas las órdenes que no hayan sido cerradas formalmente
+            orders.forEach(o => {
+                if (!o.cierreId && o.status !== 'Anulado' && o.status !== 'Cancelado') {
+                    o.closed = false;
+                }
+            });
+
             saveState();
             closeAperturaModal();
             updateCashRegisterUI();
+            renderHistory();
+            renderFinances();
             showToast(`Caja abierta exitosamente con una base de $${amount.toLocaleString()}`, "success");
         }
 
@@ -3300,8 +3293,7 @@
         function processPastDebt() {
             if (!currentSelectedClient) return;
             const amount = parseInt(document.getElementById('past-debt-amount').value);
-            const userNote = document.getElementById('past-debt-note').value.trim();
-            const note = userNote ? userNote + " (Deuda Anterior)" : "Deuda Registrada (Anterior)";
+            const note = document.getElementById('past-debt-note').value.trim() || "Deuda Registrada (Anterior)";
 
             if (isNaN(amount) || amount <= 0) {
                 showToast("Ingresa un monto válido.", "error");
@@ -3312,11 +3304,10 @@
 
             currentSelectedClient.transactions.push({
                 id: "PAS-" + Math.floor(1000 + Math.random() * 9000),
-                date: new Date().toLocaleString(),
+                date: new Date().toLocaleDateString() + " (Anterior)",
                 type: 'invoice',
                 total: amount,
                 note: note,
-                isLegacy: true,
                 closed: true
             });
 
