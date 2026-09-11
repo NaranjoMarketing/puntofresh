@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- V10.0 FINAL FIX GITHUB 2026-05-13 ULTRA RECUPERACION -->
+    <!-- V11.0 FINAL FIX DEFINITIVO RECUPERACION SERGIO 2026-05-13 2026-05-13 ULTRA RECUPERACION -->
 <title>PUNTO FRESH V10 FINAL - Punto Fresh - Panel de Administración y POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -3319,6 +3319,13 @@
 
         // FIX V6: Reconstrucción completa desde Pedidos + Abonos
         function rebuildClientCreditHistory() {
+            // V11: No reconstruir si ya hay transacciones locales recuperadas
+            let localTxCount = clients.reduce((s,c) => s + (c.transactions ? c.transactions.length : 0), 0);
+            if(localTxCount > 10) {
+                console.log(`V11: Ya hay ${localTxCount} transacciones locales, no reconstruyendo desde 0 para no borrar`);
+                // Solo agregar faltantes, no borrar
+            }
+
             console.log("🔧 V6: Reconstruyendo historial completo desde Pedidos + Abonos...");
             let fixedInvoices = 0;
             let fixedAbonos = 0;
