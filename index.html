@@ -103,7 +103,7 @@
                 </div>
                 
                 <div class="md:col-span-5 relative min-h-[220px] md:min-h-[300px] overflow-hidden bg-fresh-dark">
-                    <img id="banner-img-display" src="https://i.postimg.cc/gJh7rF9x/imagen-punto-fresh-nativos.png" alt="Toppings" class="w-full h-full object-cover transition-transform duration-700 hover:scale-105" onerror="this.onerror=null;this.src='https://placehold.co/400x400/2E062B/white?text=Punto+Fresh';">
+                    <img id="banner-img-display" src="https://i.postimg.cc/gJh7rF9x/imagen-punto-fresh-nativos.png" alt="Toppings" loading="lazy" class="w-full h-full object-cover transition-transform duration-700 hover:scale-105" onerror="this.onerror=null;this.src='https://placehold.co/400x400/2E062B/white?text=Punto+Fresh';">
                     <div class="absolute inset-0 bg-gradient-to-r from-fresh-purple via-fresh-purple/40 to-transparent pointer-events-none hidden md:block w-[35%]"></div>
                     <div class="absolute inset-0 bg-gradient-to-t from-fresh-purple via-fresh-purple/40 to-transparent pointer-events-none block md:hidden h-[35%] top-auto"></div>
                 </div>
@@ -316,16 +316,84 @@
         }
 
         async function loadDataFromCloud() {
+            let timeoutId;
+            let hasShownCached = false;
+            
+            // V25 FIX RENDIMIENTO: Mostrar cache real inmediatamente, sin esperar red
+            let cachedProducts = null;
             try {
-                if (!URL_API || URL_API.includes("REEMPLAZAR")) return;
-                
-                const response = await fetch(URL_API);
+                let stored = localStorage.getItem(DB_PREFIX + 'products');
+                if(stored) {
+                    let parsed = JSON.parse(stored);
+                    let reales = parsed.filter(function(p){ return !String(p.id).startsWith('DEMO-'); });
+                    if(reales.length > 0) {
+                        cachedProducts = reales;
+                        let cacheTime = localStorage.getItem(DB_PREFIX + 'products_cache_time');
+                        let age = cacheTime ? (Date.now() - Number(cacheTime)) / 1000 / 60 : 999; // minutos
+                        console.log("V25: Cache de " + reales.length + " productos reales, edad: " + Math.round(age) + " min");
+                        
+                        // Si cache es reciente (< 60 min), usarlo inmediato y no bloquear UI
+                        if(age < 60) {
+                            products = reales;
+                            buildCategoriesMenu();
+                            renderSpecials();
+                            renderProducts();
+                            hasShownCached = true;
+                            // Quitar mensaje de conexion lenta si existe
+                            let msgEl = document.getElementById('slow-connection-msg');
+                            if(msgEl) msgEl.style.display = 'none';
+                        }
+                    }
+                }
+            } catch(e){ console.warn("V25: Error leyendo cache", e); }
+            
+            if (!URL_API || URL_API.includes("REEMPLAZAR")) {
+                console.warn("V25: URL_API no configurada");
+                if(!hasShownCached) {
+                    // Mostrar mensaje de reintentar
+                    let grid = document.getElementById('menu-grid');
+                    if(grid) {
+                        grid.innerHTML = '<div id="slow-connection-msg" class="col-span-full py-16 text-center"><i class="fa-solid fa-wifi text-xl text-amber-500 mb-3"></i><p class="text-sm text-neutral-600 font-bold">Conexión lenta.<br>Mostrando menú guardado.</p><button onclick="loadDataFromCloud()" class="mt-4 px-6 py-3 bg-fresh-purple text-white rounded-xl text-xs font-bold">Reintentar carga</button></div>';
+                    }
+                }
+                return;
+            }
+            
+            // V25: Fetch con timeout de 4 segundos para no bloquear
+            const fetchWithTimeout = function(url, timeoutMs) {
+                return new Promise(function(resolve, reject){
+                    timeoutId = setTimeout(function(){ reject(new Error('Timeout')); }, timeoutMs);
+                    fetch(url).then(function(res){
+                        clearTimeout(timeoutId);
+                        resolve(res);
+                    }).catch(function(err){
+                        clearTimeout(timeoutId);
+                        reject(err);
+                    });
+                });
+            };
+            
+            try {
+                console.log("V25: Iniciando fetch de productos reales...");
+                let start = Date.now();
+                const response = await fetchWithTimeout(URL_API, 4000);
                 const data = await response.json();
+                let elapsed = Date.now() - start;
+                console.log("V25: Datos recibidos en " + elapsed + "ms:", data);
                 
                 if(data) {
                     if(data.products && data.products.length > 0) {
-                        products = data.products;
-                        localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                        let reales = data.products.filter(function(p){
+                            let id = String(p.id || '');
+                            return !id.startsWith('DEMO-') && !(typeof DEMO_PRODUCT_IDS !== 'undefined' && DEMO_PRODUCT_IDS.includes(id));
+                        });
+                        console.log("V25: Productos reales filtrados: " + reales.length);
+                        if(reales.length > 0) {
+                            products = reales;
+                            localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                            localStorage.setItem(DB_PREFIX + 'products_cache_time', String(Date.now()));
+                            console.log("V25: Productos actualizados en cache");
+                        }
                     }
                     if(data.config) {
                         if(data.config.company_phone) companyPhone = data.config.company_phone;
@@ -333,12 +401,23 @@
                     }
                 }
             } catch (err) {
-                console.warn("Usando datos locales (Modo Offline).", err);
+                console.warn("V25: Fetch lento o falló (" + err.message + "), usando cache si existe", err);
+                if(!hasShownCached && cachedProducts && cachedProducts.length > 0) {
+                    products = cachedProducts;
+                    console.log("V25: Usando cache de " + cachedProducts.length + " productos por fallo de red");
+                } else if(!hasShownCached) {
+                    // Mostrar boton reintentar si no hay cache
+                    let grid = document.getElementById('menu-grid');
+                    if(grid && (!products || products.length === 0)) {
+                        grid.innerHTML = '<div id="slow-connection-msg" class="col-span-full py-16 text-center"><i class="fa-solid fa-wifi text-xl text-amber-500 mb-3"></i><p class="text-sm text-neutral-600 font-bold">Conexión lenta.<br>Mostrando menú guardado.</p><button onclick="loadDataFromCloud()" class="mt-4 px-6 py-3 bg-fresh-purple text-white rounded-xl text-xs font-bold">Reintentar carga</button></div>';
+                    }
+                }
+            } finally {
+                clearTimeout(timeoutId);
+                buildCategoriesMenu();
+                renderSpecials();
+                renderProducts();
             }
-            
-            buildCategoriesMenu();
-            renderSpecials();
-            renderProducts();
         }
 
         let companyPhone = localStorage.getItem(DB_PREFIX + 'companyPhone') || "3213169929";
@@ -368,13 +447,10 @@
             updateDrawerTotals();
         }
 
-        const DEFAULT_PRODUCTS = [
-            { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Sabores Fresh", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
-            { id: "DEMO-2", name: "Granizado de Café", desc: "Café de origen granizado con un toque de crema de leche y salsa de caramelo.", category: "Café", measure: "Unidad", cost: 2500, price: 7500, stock: 40, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 8, isSpecial: false },
-            { id: "DEMO-3", name: "Gelato Frutos Rojos", desc: "Helado cremoso de frutos del bosque, sin adición de azúcar.", category: "Gelato", measure: "Unidad", cost: 3000, price: 8000, stock: 35, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 22, isSpecial: true },
-            { id: "DEMO-4", name: "Cono Especial Kids", desc: "Mini cono de vainilla decorado con gomitas y chispas de colores.", category: "Kids", measure: "Unidad", cost: 1500, price: 4500, stock: 60, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 5, isSpecial: false },
-            { id: "DEMO-5", name: "Malteada Tentación Oreo", desc: "Cremosa malteada preparada con helado artesanal, galletas Oreo y chantilly.", category: "Malteadas", measure: "Unidad", cost: 3500, price: 9800, stock: 30, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 15, isSpecial: false }
-        ];
+                const DEFAULT_PRODUCTS = []; // V24 FIX: Se eliminaron productos demo para evitar compras falsas. Antes tenia DEMO-1..5
+
+        // Productos demo eliminados - nunca se mostraran a clientes nuevos
+        const DEMO_PRODUCT_IDS = ["DEMO-1","DEMO-2","DEMO-3","DEMO-4","DEMO-5"];
 
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
@@ -412,13 +488,33 @@
                 document.getElementById('announcement-text-display').innerText = announcementMessage;
             }
 
+            // V24 FIX: Migracion - Eliminar productos demo si existen en localStorage
             const stored = localStorage.getItem(DB_PREFIX + 'products');
             if (stored) {
-                products = JSON.parse(stored);
+                try {
+                    let parsed = JSON.parse(stored);
+                    // Filtrar demos
+                    let sinDemos = parsed.filter(function(p){ return !String(p.id).startsWith('DEMO-') && !DEMO_PRODUCT_IDS.includes(p.id); });
+                    if(sinDemos.length !== parsed.length) {
+                        console.log("V24: Eliminados " + (parsed.length - sinDemos.length) + " productos demo del localStorage");
+                        products = sinDemos;
+                        localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                    } else {
+                        products = parsed;
+                    }
+                } catch(e){
+                    products = [];
+                }
             }
+            
+            // V24 FIX: NUNCA usar DEFAULT_PRODUCTS. Si no hay productos reales, mostrar cargando
             if (!products || products.length === 0) {
-                products = DEFAULT_PRODUCTS;
-                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                products = []; // Vacio, no demos
+                // Mostrar estado de carga
+                let container = document.getElementById('products-grid');
+                if(container) {
+                    container.innerHTML = '<div class="col-span-full py-16 text-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-fresh-purple mb-3"></i><p class="text-sm text-neutral-500 font-bold">Cargando productos reales de Punto Fresh...</p></div>';
+                }
             }
 
             buildCategoriesMenu();
@@ -428,6 +524,7 @@
             setPaymentMethod('Nequi');
             updateCartBadge();
             
+            // Cargar productos reales de la nube - prioridad maxima
             loadDataFromCloud();
         }
 
@@ -518,6 +615,23 @@
         }
 
         function renderProducts() {
+            // V24 FIX: Filtrar demos siempre antes de renderizar
+            if(products && products.length > 0) {
+                let antes = products.length;
+                products = products.filter(function(p){ return !String(p.id).startsWith('DEMO-') && !DEMO_PRODUCT_IDS.includes(p.id); });
+                if(antes !== products.length) {
+                    console.log('V24: Filtrados ' + (antes - products.length) + ' demos en renderProducts');
+                    localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                }
+            }
+            if(!products || products.length === 0) {
+                let container = document.getElementById('products-grid');
+                if(container) {
+                    container.innerHTML = '<div class="col-span-full py-16 text-center"><i class="fa-solid fa-store-slash text-2xl text-neutral-300 mb-3"></i><p class="text-sm text-neutral-500 font-bold">No hay productos disponibles en este momento.<br>Por favor recarga la página.</p><button onclick="loadDataFromCloud()" class="mt-4 px-4 py-2 bg-fresh-purple text-white rounded-xl text-xs font-bold">Recargar productos</button></div>';
+                }
+                return;
+            }
+
             const grid = document.getElementById('menu-grid');
             const emptyState = document.getElementById('empty-state');
             if(!grid || !emptyState) return;
@@ -607,6 +721,16 @@
         }
 
         function addToCart(id, selectedToppings = null, extraToppings = null) {
+            // V24 FIX: Bloquear productos demo
+            if(String(id).startsWith('DEMO-') || (typeof DEMO_PRODUCT_IDS !== 'undefined' && DEMO_PRODUCT_IDS.includes(String(id)))) {
+                showToast('Producto no disponible (demo). Por favor recarga la página.', 'error');
+                console.error('V24: Intento de compra demo bloqueado: ' + id);
+                products = products.filter(function(p){ return !String(p.id).startsWith('DEMO-'); });
+                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
+                if(typeof renderProducts === 'function') renderProducts();
+                return;
+            }
+
             const p = products.find(x => x.id === id);
             if (!p) return;
 
