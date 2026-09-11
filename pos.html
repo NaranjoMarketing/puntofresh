@@ -1228,6 +1228,7 @@
         let pendingWebOrders = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
         let clients = JSON.parse(localStorage.getItem(DB_PREFIX + 'clients')) || [];
         window.abonosHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'abonos') || '[]');
+        window.cierresHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios') || '[]');
         let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
         let cashAdjustments = JSON.parse(localStorage.getItem(DB_PREFIX + 'cashAdjustments')) || [];
 
@@ -1727,12 +1728,18 @@
                         }
 
                         // V6: Cargar abonos desde Sheets
+                        if(data.cierres && Array.isArray(data.cierres) && data.cierres.length > 0) {
+                            console.log(`✅ Cierres cargados de Sheets: ${data.cierres.length}`);
+                            window.cierresHistory = data.cierres;
+                            localStorage.setItem(DB_PREFIX + 'cierres_diarios', JSON.stringify(data.cierres));
+                        }
                         if(data.abonos && Array.isArray(data.abonos) && data.abonos.length > 0) {
                             console.log(`✅ Abonos cargados de Sheets: ${data.abonos.length}`);
                             window.abonosHistory = data.abonos;
                             localStorage.setItem(DB_PREFIX + 'abonos', JSON.stringify(data.abonos));
                         } else {
                             window.abonosHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'abonos') || '[]');
+        window.cierresHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios') || '[]');
                         }
 
                         companyPhone = "3213169929"; 
@@ -1994,16 +2001,27 @@
                 }
             });
 
-            expectedAbonos = 0;
+                        expectedAbonos = 0;
+            let expectedAbonosDetalle = [];
             clients.forEach(c => {
                 if (c.transactions) {
                     c.transactions.forEach(t => {
-                        if (t.type === 'payment' && t.closed !== true) {
-                            expectedAbonos += (parseInt(t.amount) || 0);
+                        if (t.type === 'payment' && (t.closed === false || t.closed === undefined)) {
+                            let amt = (parseInt(t.amount) || 0);
+                            expectedAbonos += amt;
+                            expectedAbonosDetalle.push({
+                                clientId: c.id,
+                                clientName: c.name,
+                                clientPhone: c.phone || "",
+                                amount: amt,
+                                date: t.date,
+                                transactionId: t.id
+                            });
                         }
                     });
                 }
             });
+            window.currentAbonosDetalle = expectedAbonosDetalle;
 
             expectedExpenses = expenses.filter(e => e.closed !== true).reduce((s, e) => s + (parseInt(e.val) || 0), 0);
             expectedAdjustments = cashAdjustments.filter(a => a.closed !== true).reduce((s, a) => s + (a.type === 'In' ? (parseInt(a.amount) || 0) : -(parseInt(a.amount) || 0)), 0);
@@ -2168,6 +2186,7 @@
                 difNequi: difNequi,
                 difTotal: difTotal,
                 abonos: expectedAbonos,
+                abonosDetalle: window.currentAbonosDetalle || [],
                 ventasCredito: expectedVentasCredito,
                 ajustes: expectedAdjustments,
                 categorias: currentCierreCategorias
@@ -3363,12 +3382,55 @@
                 }
             });
 
-            let totalFixed = fixedInvoices + fixedAbonos;
+            // 3. Recuperar abonos desde Cierres.abonosDetalle (rescate histórico)
+            let cierresData = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios') || '[]');
+            // También intentar desde datos de Sheets si existen
+            if(window.cierresHistory && window.cierresHistory.length > 0) {
+                cierresData = window.cierresHistory;
+            }
+            let fixedFromCierres = 0;
+            cierresData.forEach(cierre => {
+                let detalle = cierre.abonosDetalle || cierre.abonosDetalle_JSON ? (cierre.abonosDetalle || []) : [];
+                if(typeof detalle === 'string') { try { detalle = JSON.parse(detalle); } catch(e){ detalle = []; } }
+                detalle.forEach(abDet => {
+                    let client = null;
+                    let abClientId = abDet.clientId ? String(abDet.clientId).trim() : "";
+                    let abPhoneStr = abDet.clientPhone ? String(abDet.clientPhone).trim() : "";
+                    let abNameNorm = abDet.clientName ? String(abDet.clientName).toLowerCase().trim() : "";
+                    if(abClientId) client = clients.find(c => String(c.id).trim() === abClientId);
+                    if(!client && abPhoneStr && abPhoneStr !== "-") {
+                        client = clients.find(c => { if(!c.phone) return false; let cPhoneStr = String(c.phone).trim(); return abPhoneStr.includes(cPhoneStr) || cPhoneStr === abPhoneStr; });
+                    }
+                    if(!client && abNameNorm) {
+                        client = clients.find(c => c.name && String(c.name).toLowerCase().trim() === abNameNorm);
+                    }
+                    if(client) {
+                        if(!client.transactions) client.transactions = [];
+                        let exists = client.transactions.some(t => String(t.id).trim() === String(abDet.transactionId || abDet.id).trim() && t.type === 'payment');
+                        if(!exists) {
+                            console.log(`  + Abono desde Cierre ${cierre.id} $${abDet.amount} -> ${client.name}`);
+                            client.transactions.push({
+                                id: abDet.transactionId || abDet.id || ("ABO-CIE-" + Date.now()),
+                                date: abDet.date || cierre.date,
+                                type: 'payment',
+                                amount: Number(abDet.amount) || 0,
+                                closed: true,
+                                cierreId: cierre.id,
+                                recoveredFromCierre: true,
+                                note: "Abono recuperado de cierre " + cierre.id
+                            });
+                            fixedFromCierres++;
+                        }
+                    }
+                });
+            });
+
+            let totalFixed = fixedInvoices + fixedAbonos + fixedFromCierres;
             if(totalFixed > 0) {
-                console.log(`✅ Recuperados: ${fixedInvoices} facturas + ${fixedAbonos} abonos = ${totalFixed}`);
+                console.log(`✅ Recuperados: ${fixedInvoices} facturas + ${fixedAbonos} abonos hoja + ${fixedFromCierres} abonos cierres = ${totalFixed}`);
                 saveState();
                 sincronizarConGoogle("syncClients", clients);
-                showToast(`Recuperados ${fixedInvoices} pedidos y ${fixedAbonos} abonos faltantes.`, "success");
+                showToast(`Recuperados ${fixedInvoices} pedidos, ${fixedAbonos + fixedFromCierres} abonos faltantes.`, "success");
                 renderClientsList();
                 if(currentSelectedClient) renderAccountStatement();
             } else {
