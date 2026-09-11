@@ -2058,7 +2058,7 @@
 
             currentCierreCategorias = {};
             activeOrders.forEach(o => {
-                o.items.forEach(item => {
+                getItemsArray(o).forEach(item => {
                     const prod = products.find(p => String(p.id).trim() === String(item.id).trim());
                     const catName = prod ? prod.category : "Heladería General";
                     if (!currentCierreCategorias[catName]) {
@@ -2537,7 +2537,7 @@
             document.getElementById('pos-waiter-indicator').innerHTML = `Atribución: <span class="text-fresh-purple font-extrabold">${selectedTableWaiter}</span>`;
             
             posCart = [];
-            m.items.forEach(i => {
+            getItemsArray(m).forEach(i => {
                 posCart.push({ 
                     id: i.id, 
                     name: i.name, 
@@ -3532,11 +3532,11 @@
         // V19 - SINCRONIZACION AUTOMATICA PEDIDOS -> CLIENTES (SOLUCION DEFINITIVA SERGIO)
         function sincronizarPedidosAClientes() {
             if(!orders || orders.length === 0) {
-                console.log("V21: No hay pedidos para sincronizar");
+                console.log("V22: No hay pedidos para sincronizar");
                 return 0;
             }
             if(!clients || clients.length === 0) {
-                console.log("V21: No hay clientes para sincronizar");
+                console.log("V22: No hay clientes para sincronizar");
                 return 0;
             }
             
@@ -3549,7 +3549,7 @@
                 return true;
             });
             
-            console.log("V21: Pedidos a credito encontrados: " + ordersCredit.length);
+            console.log("V22: Pedidos a credito encontrados: " + ordersCredit.length);
             
             ordersCredit.forEach(function(order){
                 let cname = String(order.clientName).toLowerCase().trim();
@@ -3619,9 +3619,9 @@
                 if(total <= 0) {
                     total = Number(order.total_final || order.valor_total || order.grandTotal || 0);
                 }
-                console.log("V21: Orden " + order.id + " total calculado: $" + total + " (original: " + order.total + ")");
+                console.log("V22: Orden " + order.id + " total calculado: $" + total + " (original: " + order.total + ")");
                 if(total <= 0) {
-                    console.warn("V21: Orden " + order.id + " sin total, omitida. Datos:", order);
+                    console.warn("V22: Orden " + order.id + " sin total, omitida. Datos:", order);
                     // No retornar, crear con total 0 pero marcar para recalcular despues
                     // return;
                 }
@@ -3639,20 +3639,20 @@
             });
             
             if(nuevos > 0) {
-                console.log("V21: Sincronizados " + nuevos + " pedidos a clientes");
+                console.log("V22: Sincronizados " + nuevos + " pedidos a clientes");
                 saveState();
                 // Guardar automaticamente en Sheets si hay nuevos
                 setTimeout(function(){
                     sincronizarConGoogle("syncClients", clients);
-                    console.log("V21: Clientes sincronizados a Google Sheets");
+                    console.log("V22: Clientes sincronizados a Google Sheets");
                 }, 1000);
             }
             return nuevos;
         }
         
         function rebuildClientCreditHistory() {
-            // V21: Esta funcion ahora usa la sincronizacion automatica Pedidos -> Clientes
-            console.log("V21: Reconstruyendo historial desde Pedidos...");
+            // V22: Esta funcion ahora usa la sincronizacion automatica Pedidos -> Clientes
+            console.log("V22: Reconstruyendo historial desde Pedidos...");
             let count = sincronizarPedidosAClientes();
             if(count > 0) {
                 showToast("Sincronizados " + count + " pedidos a credito desde Pedidos", "success");
@@ -3675,12 +3675,12 @@
                 window.loadDataFromCloud = async function() {
                     let result = await original.apply(this, arguments);
                     setTimeout(function(){
-                        console.log("V21: Auto-sincronizacion Pedidos -> Clientes despues de cargar nube");
+                        console.log("V22: Auto-sincronizacion Pedidos -> Clientes despues de cargar nube");
                         sincronizarPedidosAClientes();
                         renderClientsList();
                         let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
                         if(sergio && sergio.transactions) {
-                            console.log("V21: Sergio tiene " + sergio.transactions.length + " transacciones despues de sync");
+                            console.log("V22: Sergio tiene " + sergio.transactions.length + " transacciones despues de sync");
                             let sel = clients.find(function(c){ return c.id === (currentSelectedClient ? currentSelectedClient.id : ''); });
                             if(!sel && sergio.transactions.length > 0) {
                                 currentSelectedClient = sergio;
@@ -3696,7 +3696,7 @@
         // Auto-sync al iniciar si hay pedidos locales
         
         function recalcularTotalesSergio() {
-            console.log("V21: Recalculando totales de Sergio desde Pedidos originales...");
+            console.log("V22: Recalculando totales de Sergio desde Pedidos originales...");
             let ordersLS = orders || JSON.parse(localStorage.getItem('PUNTOFRESH_V1_orders') || '[]');
             let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
             if(!sergio) { console.log("No se encontro Sergio"); return; }
@@ -3750,15 +3750,15 @@
                         }
                     } catch(e){}
                 }
-                console.log("V21: Orden " + tx.id + " total final: $" + total);
+                console.log("V22: Orden " + tx.id + " total final: $" + total);
                 if(total > 0) {
-                    console.log("V21: Corregido " + tx.id + " de $" + tx.total + " a $" + total);
+                    console.log("V22: Corregido " + tx.id + " de $" + tx.total + " a $" + total);
                     tx.total = total;
                 }
             });
             // Recalcular deuda total
             let deuda = sergio.transactions.filter(function(t){ return t.type === 'invoice'; }).reduce(function(s,t){ return s + Number(t.total||0); }, 0);
-            console.log("V21: Deuda total Sergio recalculada: $" + deuda);
+            console.log("V22: Deuda total Sergio recalculada: $" + deuda);
             saveState();
             renderAccountStatement();
             renderClientsList();
@@ -3789,7 +3789,7 @@
             if(sergio && sergio.transactions && sergio.transactions.length > 0) {
                 let conCero = sergio.transactions.filter(function(t){ return Number(t.total) === 0; }).length;
                 if(conCero > 0) {
-                    console.log("V21: Sergio tiene " + conCero + " facturas en $0, recalculando...");
+                    console.log("V22: Sergio tiene " + conCero + " facturas en $0, recalculando...");
                     recalcularTotalesSergio();
                 }
             }
@@ -3798,12 +3798,52 @@
         window.addEventListener('load', function(){
             setTimeout(function(){
                 if(orders && orders.length > 0 && clients && clients.length > 0) {
-                    console.log("V21: Auto-sync inicial");
+                    console.log("V22: Auto-sync inicial");
                     sincronizarPedidosAClientes();
                 }
             }, 3000);
         });
 
+
+        
+        function getItemsArray(orderOrItem) {
+            let items = orderOrItem.items || orderOrItem.items_JSON || orderOrItem.productos || [];
+            if(typeof items === 'string') {
+                try { 
+                    items = JSON.parse(items); 
+                } catch(e){ 
+                    console.warn("No se pudo parsear items:", items.substring(0,100));
+                    items = []; 
+                }
+            }
+            if(!Array.isArray(items)) {
+                if(items && items.productos && Array.isArray(items.productos)) {
+                    items = items.productos;
+                } else {
+                    items = [];
+                }
+            }
+            return items;
+        }
+        function getItemPrice(item) {
+            let p = item.price;
+            if(p === undefined || p === null || p === '' || isNaN(Number(p))) {
+                p = item.precio || item.valor || item.unitPrice || item.item_price || item.total || item.subtotal || 0;
+            }
+            // Si p es string con $ o coma
+            if(typeof p === 'string') {
+                p = p.replace(/\$|,/g, '').replace(/\./g, '').replace(',', '.'); // Limpieza basica
+                // Actually better: remove $ and commas
+                p = p.replace(/[^0-9.-]/g, '');
+            }
+            let num = Number(p);
+            return isNaN(num) ? 0 : num;
+        }
+        function getItemQty(item) {
+            let q = item.quantity || item.qty || item.cantidad || item.qtyOrdered || 1;
+            let num = Number(q);
+            return isNaN(num) || num <=0 ? 1 : num;
+        }
 
         function getOrderTotalSafe(order) {
             let t = Number(order.total || 0);
@@ -4494,7 +4534,7 @@
 
             let continuousProductStats = {};
             orders.filter(o => o.status !== 'Anulado' && o.status !== 'Cancelado').forEach(o => {
-                o.items.forEach(i => {
+                getItemsArray(o).forEach(i => {
                     if(!continuousProductStats[i.name]) {
                         continuousProductStats[i.name] = 0;
                     }
@@ -4599,7 +4639,7 @@
                 o.total = 0; 
                 o.mixedDetails = null;
                 
-                o.items.forEach(item => {
+                getItemsArray(o).forEach(item => {
                     let p = products.find(x => String(x.id).trim() === String(item.id).trim());
                     if (p) {
                         p.stock = (p.stock || 0) + item.quantity;
