@@ -3577,10 +3577,15 @@
         }
 
         function forceRebuildAndSync() {
-            // V9: Recuperación total
+            // V9.1: Recuperación total con fallback
+            let ordersLS = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+            if((!orders || orders.length === 0) && ordersLS.length > 0) {
+                orders = ordersLS;
+            }
             if(!orders || orders.length === 0) {
                 showToast("Cargando pedidos desde Sheets... espera 3 segundos y vuelve a intentar.", "info");
                 loadDataFromCloud();
+                setTimeout(() => forceRebuildAndSync(), 3000);
                 return;
             }
             console.log("Iniciando recuperación total desde Pedidos...");
@@ -3612,9 +3617,25 @@
         }
         
         function recuperarTodoDePedidos() {
-            // Botón de emergencia: borra transacciones vacías y reconstruye todo desde Pedidos
+            // V9.1: Recuperación forzada desde localStorage + Sheets
+            let ordersLocal = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+            if((!orders || orders.length === 0) && ordersLocal.length > 0) {
+                console.log(`Orders en memoria vacíos, usando localStorage: ${ordersLocal.length}`);
+                orders = ordersLocal;
+            }
             if(!orders || orders.length === 0) {
-                showToast("No hay pedidos cargados para recuperar", "error");
+                showToast("No hay pedidos cargados. Recargando desde Google Sheets...", "info");
+                loadDataFromCloud();
+                setTimeout(() => {
+                    let ordersAfter = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+                    if(ordersAfter.length > 0) {
+                        orders = ordersAfter;
+                        showToast(`Se cargaron ${orders.length} pedidos. Dale de nuevo a Recuperar Todo.`, "success");
+                        renderBillingTables();
+                    } else {
+                        showToast("Aún no hay pedidos en Sheets. Verifica la hoja Pedidos.", "error");
+                    }
+                }, 3000);
                 return;
             }
             console.log("RECUPERACIÓN DE EMERGENCIA: Reconstruyendo todo desde Pedidos");
@@ -4242,22 +4263,31 @@
             }
 
             filteredOrders.forEach(o => {
-                rev += o.total;
+                rev += (Number(o.total)||0);
                 let wKey = o.waiterName || "Caja";
                 if(!waiterStats[wKey]) waiterStats[wKey] = { count: 0, amount: 0 };
                 waiterStats[wKey].count++;
-                waiterStats[wKey].amount += o.total;
+                waiterStats[wKey].amount += (Number(o.total)||0);
 
-                o.items.forEach(i => {
-                    let prod = products.find(p => String(p.id).trim() === String(i.id).trim());
+                let itemsArray = [];
+                if(Array.isArray(o.items)) itemsArray = o.items;
+                else if(typeof o.items === 'string') { try { itemsArray = JSON.parse(o.items); } catch(e){ itemsArray = []; } }
+                else if(o.items && typeof o.items === 'object') itemsArray = [o.items];
+
+                itemsArray.forEach(i => {
+                    if(!i) return;
+                    let prodId = i.id || i.productId || "";
+                    let prod = products.find(p => String(p.id).trim() === String(prodId).trim());
                     let catName = prod ? prod.category : "General / Varios";
-                    if (prod) cost += ((parseInt(prod.cost) || 0) * i.quantity);
+                    let qty = Number(i.quantity || i.qty || 1) || 1;
+                    let price = Number(i.price || 0) || 0;
+                    if (prod) cost += ((parseInt(prod.cost) || 0) * qty);
 
                     if (!categoryStats[catName]) {
                         categoryStats[catName] = { qty: 0, total: 0 };
                     }
-                    categoryStats[catName].qty += i.quantity;
-                    categoryStats[catName].total += (i.price * i.quantity);
+                    categoryStats[catName].qty += qty;
+                    categoryStats[catName].total += (price * qty);
                 });
             });
 
