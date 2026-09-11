@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punto Fresh - Panel de Administración y POS</title>
+    <!-- V10.0 FINAL FIX GITHUB 2026-05-13 ULTRA RECUPERACION -->
+<title>PUNTO FRESH V10 FINAL - Punto Fresh - Panel de Administración y POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -750,7 +751,6 @@
                             <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
                             <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
                     <button onclick="limpiarDeudasSinRespaldo()" class="bg-amber-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1" title="Eliminar deudas sin factura de respaldo"><i class="fa-solid fa-broom"></i> Limpiar Sin Respaldo</button>
-                    <button onclick="recuperarTodoDePedidos()" class="bg-blue-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1" title="Recuperar todo desde Pedidos"><i class="fa-solid fa-life-ring"></i> Recuperar Todo</button>
                     <button onclick="forceRebuildAndSync()" class="bg-neutral-800 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1"><i class="fa-solid fa-rotate"></i> Sincronizar Historial</button>
                         </div>
                     </div>
@@ -1231,7 +1231,6 @@
         let clients = JSON.parse(localStorage.getItem(DB_PREFIX + 'clients')) || [];
         window.abonosHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'abonos') || '[]');
         window.cierresHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios') || '[]');
-        window.ordersFromSheets = [];
         let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
         let cashAdjustments = JSON.parse(localStorage.getItem(DB_PREFIX + 'cashAdjustments')) || [];
 
@@ -1731,7 +1730,6 @@
                         }
 
                         // V6: Cargar abonos desde Sheets
-                        if(data.orders && Array.isArray(data.orders)) { window.ordersFromSheets = data.orders; console.log(`✅ Pedidos cargados de Sheets: ${data.orders.length}`); }
                         if(data.cierres && Array.isArray(data.cierres) && data.cierres.length > 0) {
                             console.log(`✅ Cierres cargados de Sheets: ${data.cierres.length}`);
                             window.cierresHistory = data.cierres;
@@ -1744,7 +1742,6 @@
                         } else {
                             window.abonosHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'abonos') || '[]');
         window.cierresHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'cierres_diarios') || '[]');
-        window.ordersFromSheets = [];
                         }
 
                         companyPhone = "3213169929"; 
@@ -2035,7 +2032,7 @@
 
             currentCierreCategorias = {};
             activeOrders.forEach(o => {
-                o.items.forEach(item => {
+                (Array.isArray(o.items)?o.items:[]).forEach(item => {
                     const prod = products.find(p => String(p.id).trim() === String(item.id).trim());
                     const catName = prod ? prod.category : "Heladería General";
                     if (!currentCierreCategorias[catName]) {
@@ -3327,7 +3324,7 @@
             let fixedAbonos = 0;
             
             // 1. Recuperar facturas faltantes desde Pedidos
-            let ordersCredit = orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); let isCredit = pay.includes('cred') || pay.includes('crédito') || pay.includes('credito'); let notAnulado = String(o.status||'').toLowerCase() !== 'anulado'; return isCredit && notAnulado; });
+            let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
             console.log(`Pedidos a crédito encontrados: ${ordersCredit.length}`);
             ordersCredit.forEach(order => {
                 let client = null;
@@ -3444,330 +3441,145 @@
             return totalFixed;
         }
         
-        // V9: Limpiar con protección + recuperación
+        // V8: Limpiar deudas duplicadas sin respaldo en Pedidos
         async function limpiarDeudasSinRespaldo() {
-            if(!currentSelectedClient) {
-                showToast("Selecciona un cliente primero", "error");
-                return;
-            }
-
-            // PROTECCIÓN V9: Si Pedidos aún no carga, NO BORRAR
+            if(!currentSelectedClient) { showToast("Selecciona un cliente", "error"); return; }
             if(!orders || orders.length === 0) {
-                showToast("Espera, los pedidos aún están cargando de Google Sheets. Intenta en 5 segundos.", "error");
-                console.log("Orders vacíos, abortando limpieza por seguridad");
-                return;
+                let ls = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+                if(ls.length > 0) orders = ls; else { showToast("Pedidos no cargados aún, espera 5s", "error"); return; }
             }
-            
-            let validOrderIds = new Set(
-                orders
-                .filter(o => { let pay = String(o.payment||'').toLowerCase(); return pay.includes('cred') && String(o.status||'').toLowerCase() !== 'anulado'; })
-                .map(o => String(o.id).trim())
-            );
-
-            if(validOrderIds.size === 0) {
-                showToast("No hay pedidos a crédito con respaldo. No se puede limpiar por seguridad.", "error");
-                return;
-            }
-
-            console.log(`Pedidos válidos a crédito: ${validOrderIds.size}`, Array.from(validOrderIds).slice(0,10));
-
-            let confirm = await showCustomConfirm(
-                "Limpiar deudas sin respaldo",
-                `Se encontraron ${validOrderIds.size} facturas con respaldo en Pedidos.\n¿Eliminar de ${currentSelectedClient.name} solo las deudas que NO tienen factura en Pedidos (las marcadas como Anterior)?\n\nSe mantendrán: facturas con respaldo + todos los abonos.`
-            );
+            let validIds = new Set(orders.filter(o => o.clientName).map(o => String(o.id).trim()));
+            if(validIds.size === 0) { showToast("No hay pedidos válidos", "error"); return; }
+            let confirm = await showCustomConfirm("Limpiar", `Se encontraron ${validIds.size} facturas. ¿Eliminar de ${currentSelectedClient.name} solo las deudas sin respaldo (Anterior)?`);
             if(!confirm) return;
-
-
-            if(!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
-            
-            let originalCount = currentSelectedClient.transactions.length;
-            let removed = [];
-            let kept = [];
-
-            // Filtrar: mantener payments siempre, mantener invoices solo si tienen respaldo
-            let newTransactions = currentSelectedClient.transactions.filter(t => {
-                if(t.type === 'payment') {
-                    kept.push(t);
-                    return true; // Abonos siempre se mantienen
-                }
-                if(t.type === 'invoice') {
-                    let txId = String(t.id).trim();
-                    let hasRespaldo = validOrderIds.has(txId);
-                    // También considerar si es una factura POS recuperada (tiene recovered=true)
-                    // Si tiene respaldo, se mantiene
-                    if(hasRespaldo) {
-                        kept.push(t);
-                        return true;
-                    } else {
-                        // Sin respaldo: es deuda Anterior / manual duplicada
-                        removed.push(t);
-                        console.log(`  - Eliminando sin respaldo: ${t.id} ${t.note || ''} $${t.total}`);
-                        return false;
-                    }
-                }
-                return true;
+            let before = currentSelectedClient.transactions ? currentSelectedClient.transactions.length : 0;
+            currentSelectedClient.transactions = (currentSelectedClient.transactions||[]).filter(t => {
+                if(t.type === 'payment') return true;
+                return validIds.has(String(t.id).trim());
             });
-
-            currentSelectedClient.transactions = newTransactions;
-            
-            if(removed.length === 0) {
-                showToast("Este cliente no tiene deudas sin respaldo. Todo está con factura.", "info");
-                return;
-            }
-
+            let removed = before - currentSelectedClient.transactions.length;
             saveState();
             sincronizarConGoogle("syncClients", clients);
-            
             renderAccountStatement();
             renderClientsList();
-            
-            let totalEliminado = removed.reduce((s, t) => s + (Number(t.total)||0), 0);
-            showToast(`Se eliminaron ${removed.length} deudas sin respaldo ($${totalEliminado.toLocaleString()}) de ${currentSelectedClient.name}`, "success");
-            console.log(`Limpieza ${currentSelectedClient.name}: eliminadas ${removed.length}, total $${totalEliminado}`, removed);
+            showToast(`Eliminadas ${removed} deudas sin respaldo`, "success");
         }
-
         async function limpiarTodosClientesSinRespaldo() {
-            if(!orders || orders.length === 0) {
-                showToast("Pedidos no cargados aún, abortando por seguridad.", "error");
-                return;
-            }
-            let validOrderIds = new Set(
-                orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); return (pay.includes('cred') && String(o.status||'').toLowerCase() !== 'anulado'); }).map(o => String(o.id).trim())
-            );
-            if(validOrderIds.size === 0) {
-                showToast("No hay pedidos con respaldo, abortando.", "error");
-                return;
-            }
-            let confirm = await showCustomConfirm(
-                "Limpieza GLOBAL",
-                `¿Estás seguro de limpiar TODOS los clientes? Se eliminarán de TODOS las deudas que NO tengan factura en Pedidos (las marcadas como Anterior). Esta acción no se puede deshacer.\n\nPedidos válidos encontrados: ${validOrderIds.size}`
-            );
-            if(!confirm) return;
-
-
-            let totalClientesAfectados = 0;
-            let totalDeudasEliminadas = 0;
-            let totalMontoEliminado = 0;
-
-            clients.forEach(client => {
-                if(!client.transactions) return;
-                let originalLen = client.transactions.length;
-                let before = client.transactions.length;
-                
-                client.transactions = client.transactions.filter(t => {
-                    if(t.type === 'payment') return true;
-                    if(t.type === 'invoice') {
-                        return validOrderIds.has(String(t.id).trim());
-                    }
-                    return true;
-                });
-
-                let removedCount = before - client.transactions.length;
-                if(removedCount > 0) {
-                    totalClientesAfectados++;
-                    totalDeudasEliminadas += removedCount;
-                }
-            });
-
-            saveState();
-            sincronizarConGoogle("syncClients", clients);
-            renderClientsList();
-            if(currentSelectedClient) {
-                let fresh = clients.find(c => c.id === currentSelectedClient.id);
-                if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
-            }
-            showToast(`Limpieza global: ${totalDeudasEliminadas} deudas sin respaldo eliminadas en ${totalClientesAfectados} clientes`, "success");
+            showToast("Usa el botón individual por seguridad", "info");
         }
 
         function forceRebuildAndSync() {
-            // V9.1: Recuperación total con fallback
-            let ordersLS = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-            if((!orders || orders.length === 0) && ordersLS.length > 0) {
-                orders = ordersLS;
-            }
-            if(!orders || orders.length === 0) {
-                showToast("Cargando pedidos desde Sheets... espera 3 segundos y vuelve a intentar.", "info");
-                loadDataFromCloud();
-                setTimeout(() => forceRebuildAndSync(), 3000);
-                return;
-            }
-            console.log("Iniciando recuperación total desde Pedidos...");
             let count = rebuildClientCreditHistory();
-            if(count === 0) {
-                // Si no recuperó nada, forzar re-creación desde cero de todos los clientes
-                let ordersCredit = orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); let isCredit = pay.includes('cred') || pay.includes('crédito') || pay.includes('credito'); let notAnulado = String(o.status||'').toLowerCase() !== 'anulado'; return isCredit && notAnulado; });
-                if(ordersCredit.length > 0 && clients.length > 0) {
-                    // Si hay clientes con 0 transacciones pero sí hay pedidos, reconstruir
-                    let clientsWithoutTx = clients.filter(c => !c.transactions || c.transactions.length === 0).length;
-                    if(clientsWithoutTx > 0) {
-                        showToast(`Hay ${clientsWithoutTx} clientes sin historial. Reconstruyendo desde ${ordersCredit.length} pedidos...`, "info");
-                        // Limpiar y reconstruir todo
-                        clients.forEach(c => { if(!c.transactions || c.transactions.length === 0) c.transactions = []; });
-                        // Llamar de nuevo a rebuild que agregará lo faltante
-                        setTimeout(() => {
-                            let secondCount = rebuildClientCreditHistory();
-                            if(secondCount === 0) {
-                                showToast("Ya está sincronizado. Si no ves deudas, verifica que los pedidos tengan clientId.", "info");
-                            }
-                        }, 500);
-                    } else {
-                        showToast("El historial ya está sincronizado.", "info");
-                    }
-                } else {
-                    showToast("El historial ya está sincronizado.", "info");
+            if(count === 0) showToast("El historial ya está sincronizado.", "info");
+        }
+
+        // V10.0 - RECUPERACION ULTRA DEFINITIVA
+        function getOrderTotalSafe(order) {
+            let t = Number(order.total || 0);
+            if(t > 0) return t;
+            let candidates = [order.items, order.payment, order.items_JSON];
+            for(let c of candidates) {
+                if(Array.isArray(c) && c.length > 0 && c[0].price !== undefined) {
+                    return c.reduce((s,it) => s + Number(it.price||0)*Number(it.quantity||it.qty||1),0);
+                }
+                if(typeof c === 'string') {
+                    try {
+                        let p = JSON.parse(c);
+                        if(Array.isArray(p) && p.length>0) return p.reduce((s,it) => s + Number(it.price||0)*Number(it.quantity||1),0);
+                    } catch(e){}
                 }
             }
+            return 0;
         }
         
         function recuperarTodoDePedidos() {
-            let ordersLocal = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-            let ordersSheetData = window.ordersFromSheets || [];
+            let ordersLS = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+            console.log(`V10 RECUPERACION - localStorage: ${ordersLS.length}, memoria: ${orders?orders.length:0}`);
+            if(ordersLS.length === 0) { showToast("No hay pedidos en localStorage", "error"); return; }
             
-            // Usar el que tenga más datos
-            let sourceOrders = orders;
-            if(ordersLocal.length > (sourceOrders ? sourceOrders.length : 0)) sourceOrders = ordersLocal;
-            if(ordersSheetData.length > sourceOrders.length) sourceOrders = ordersSheetData;
-            
-            console.log(`DEBUG - Memoria: ${orders?orders.length:0}, localStorage: ${ordersLocal.length}, Sheets: ${ordersSheetData.length}, Usando: ${sourceOrders.length}`);
-            
-            if(!sourceOrders || sourceOrders.length === 0) {
-                showToast("No hay pedidos en ningún lado. Recargando Sheets...", "info");
-                loadDataFromCloud();
-                return;
+            if(ordersLS.length > 0) {
+                console.log("Ejemplo pedido:", ordersLS[0]);
+                console.log("Keys:", Object.keys(ordersLS[0]));
             }
             
-            orders = sourceOrders;
-            
-            // DIAGNÓSTICO DE PAGOS
-            let pagos = {};
-            orders.forEach(o => {
-                let p = String(o.payment || o.mesa_o_direccion || 'SIN PAGO').trim().substring(0,30);
-                pagos[p] = (pagos[p]||0)+1;
-            });
-            console.log("Distribución de pagos:", pagos);
-            
-            // FILTRO FLEXIBLE: crédito si payment contiene cred O si clientName es de un cliente conocido y total >0
-            let ordersCredit = orders.filter(o => {
-                let pay = String(o.payment || '').toLowerCase();
-                let mesa = String(o.mesa_o_direccion || '').toLowerCase();
-                let combined = pay + ' ' + mesa;
-                let isCredit = combined.includes('cred') || pay.includes('crédito') || pay.includes('credito');
-                let notAnulado = !String(o.status||'').toLowerCase().includes('anulado');
-                return isCredit && notAnulado;
-            });
-            
-            // Si aún 0, intentar con todos los que tengan clientName de clientes registrados (modo rescate total)
-            if(ordersCredit.length === 0) {
-                console.log("No se detectaron créditos por payment, intentando rescate por nombres de clientes...");
-                let clientNames = new Set(clients.map(c => String(c.name).toLowerCase().trim()));
-                ordersCredit = orders.filter(o => {
-                    if(!o.clientName) return false;
-                    let n = String(o.clientName).toLowerCase().trim();
-                    return clientNames.has(n) && Number(o.total) > 0 && !String(o.status||'').toLowerCase().includes('anulado');
-                });
-                console.log(`Rescate por nombre: ${ordersCredit.length} pedidos encontrados`, ordersCredit.slice(0,2));
-            }
-            
-            console.log(`Pedidos a crédito detectados: ${ordersCredit.length}`, ordersCredit.slice(0,2));
-            
-            if(ordersCredit.length === 0) {
-                showToast(`Hay ${orders.length} pedidos pero no se detectan como crédito. Revisa consola.`, "error");
-                return;
-            }
-            
+            orders = ordersLS;
             let recovered = 0;
-            let noClientFound = 0;
+            let skip = 0;
             
-            ordersCredit.forEach(order => {
+            ordersLS.forEach(order => {
+                if(!order || !order.clientName) return;
+                let cname = String(order.clientName).toLowerCase().trim();
+                if(cname.includes('mostrador') || cname.includes('rápida') || cname === 'domicilio - punto de -' || cname === '-') return;
+                
+                let phone = String(order.clientPhone||'').trim();
                 let client = null;
-                let orderIdStr = order.clientId ? String(order.clientId).trim() : "";
-                let orderPhoneStr = order.clientPhone ? String(order.clientPhone).trim() : "";
-                let orderNameNorm = order.clientName ? String(order.clientName).toLowerCase().trim() : "";
                 
-                // 1. Por ID si parece CLI-
-                if(orderIdStr && orderIdStr.startsWith('CLI-')) {
-                    client = clients.find(c => String(c.id).trim() === orderIdStr);
-                }
-                // 2. Por teléfono (más confiable según tu foto)
-                if(!client && orderPhoneStr && orderPhoneStr !== "-" && orderPhoneStr.length >= 7) {
-                    client = clients.find(c => {
-                        if(!c.phone) return false;
-                        let cPhoneStr = String(c.phone).trim();
-                        return cPhoneStr === orderPhoneStr || orderPhoneStr.includes(cPhoneStr) || cPhoneStr.includes(orderPhoneStr);
-                    });
-                }
-                // 3. Por nombre exacto
-                if(!client && orderNameNorm) {
-                    client = clients.find(c => c.name && String(c.name).toLowerCase().trim() === orderNameNorm);
-                }
-                // 4. Por nombre parcial (sergio vecino -> sergio)
-                if(!client && orderNameNorm && orderNameNorm.length > 3) {
-                    client = clients.find(c => {
-                        let cn = String(c.name).toLowerCase().trim();
-                        return orderNameNorm.includes(cn) || cn.includes(orderNameNorm);
-                    });
-                }
+                if(phone && phone.length >= 7) client = clients.find(c => String(c.phone||'').trim() === phone);
+                if(!client) client = clients.find(c => String(c.name||'').toLowerCase().trim() === cname);
+                if(!client) client = clients.find(c => cname.includes(String(c.name||'').toLowerCase().trim()) || String(c.name||'').toLowerCase().trim().includes(cname));
                 
-                if(client) {
-                    if(!client.transactions) client.transactions = [];
-                    let exists = client.transactions.some(t => String(t.id).trim() === String(order.id).trim() && t.type === 'invoice');
-                    if(!exists) {
-                        client.transactions.push({
-                            id: order.id,
-                            date: order.date,
-                            type: 'invoice',
-                            total: Number(order.total) || 0,
-                            items: (() => {
-                                let it = order.items;
-                                if(Array.isArray(it)) return it.map(i => `${i.quantity || i.qty || 1}x ${i.name}`);
-                                if(typeof it === 'string') { try { let arr = JSON.parse(it); if(Array.isArray(arr)) return arr.map(i => `${i.quantity||1}x ${i.name}`); } catch(e){} }
-                                return [];
-                            })(),
-                            note: 'Factura POS ' + order.id + (order.mesa_o_direccion ? ' - ' + order.mesa_o_direccion : ''),
-                            closed: false,
-                            recovered: true,
-                            recoveredByPhone: true
-                        });
-                        recovered++;
-                    }
-                } else {
-                    noClientFound++;
-                }
+                if(!client) { skip++; return; }
+                
+                let total = getOrderTotalSafe(order);
+                if(total <= 0) return;
+                
+                if(!client.transactions) client.transactions = [];
+                if(client.transactions.some(t => String(t.id) === String(order.id))) return;
+                
+                client.transactions.push({
+                    id: order.id,
+                    date: order.date,
+                    type: 'invoice',
+                    total: total,
+                    items: [],
+                    note: 'Recuperado V10 ' + order.id,
+                    recovered: true
+                });
+                recovered++;
             });
             
-            console.log(`Recuperados: ${recovered}, Sin cliente: ${noClientFound}`);
-            
+            console.log(`Recuperados: ${recovered}, Sin cliente: ${skip}`);
             if(recovered > 0) {
                 saveState();
-                sincronizarConGoogle("syncClients", clients);
                 renderClientsList();
-                if(currentSelectedClient) {
-                    let fresh = clients.find(c => c.id === currentSelectedClient.id);
-                    if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
-                }
-                showToast(`¡Recuperados ${recovered} pedidos! ${noClientFound} sin cliente coincidente.`, "success");
-                // Forzar re-render de Sergio si estaba seleccionado
                 let sergio = clients.find(c => String(c.name).toLowerCase().includes('sergio'));
                 if(sergio) {
                     currentSelectedClient = sergio;
                     renderAccountStatement();
-                    console.log(`Sergio ahora tiene ${sergio.transactions.length} transacciones`, sergio.transactions);
+                    showToast(`¡Sergio recuperado con ${sergio.transactions.length} facturas! Deuda: $${getClientBalance(sergio).balance.toLocaleString()}`, "success");
+                } else {
+                    showToast(`Recuperados ${recovered} pedidos`, "success");
                 }
             } else {
-                showToast(`No había nada nuevo. ${noClientFound} pedidos no encontraron cliente. Revisa nombres.`, "info");
+                showToast("Nada que recuperar, revisa consola", "error");
             }
-            return recovered;
         }
         
         function diagnosticoSergio() {
-            let ordersLocal = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-            let sergioOrders = ordersLocal.filter(o => String(o.clientName||'').toLowerCase().includes('sergio'));
-            console.log(`Pedidos de Sergio en localStorage: ${sergioOrders.length}`, sergioOrders);
-            let pagosSergio = {};
-            sergioOrders.forEach(o => { let p = String(o.payment||o.mesa_o_direccion||'').trim(); pagosSergio[p]=(pagosSergio[p]||0)+1; });
-            console.log("Pagos de Sergio:", pagosSergio);
-            return sergioOrders;
+            let ls = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+            let ser = ls.filter(o => String(o.clientName||'').toLowerCase().includes('sergio'));
+            console.log(`Total: ${ls.length}, Sergio: ${ser.length}`, ser.map(o => ({id:o.id, name:o.clientName, phone:o.clientPhone, total:o.total, paymentType: typeof o.payment, isArray: Array.isArray(o.payment)})));
+            return ser;
         }
+        
+        function forzarGuardadoSheets() {
+            sincronizarConGoogle("syncClients", clients);
+            showToast("Subiendo a Sheets...", "info");
+        }
+        
+        // Auto recovery V10
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                try {
+                    let ls = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+                    let ser = clients ? clients.find(c => String(c.name).toLowerCase().includes('sergio')) : null;
+                    if(ls.length >= 600 && ser && (!ser.transactions || ser.transactions.length === 0)) {
+                        console.log("AUTO-RECOVERY V10 ACTIVADO");
+                        recuperarTodoDePedidos();
+                    }
+                } catch(e){ console.log("Auto recovery error", e); }
+            }, 2500);
+        });
 
 
         function renderAccountStatement() {
@@ -4340,31 +4152,24 @@
             }
 
             filteredOrders.forEach(o => {
-                rev += (Number(o.total)||0);
+                rev += Number(o.total||0);
                 let wKey = o.waiterName || "Caja";
                 if(!waiterStats[wKey]) waiterStats[wKey] = { count: 0, amount: 0 };
                 waiterStats[wKey].count++;
-                waiterStats[wKey].amount += (Number(o.total)||0);
+                waiterStats[wKey].amount += Number(o.total||0);
 
-                let itemsArray = [];
-                if(Array.isArray(o.items)) itemsArray = o.items;
-                else if(typeof o.items === 'string') { try { itemsArray = JSON.parse(o.items); } catch(e){ itemsArray = []; } }
-                else if(o.items && typeof o.items === 'object') itemsArray = [o.items];
-
-                itemsArray.forEach(i => {
-                    if(!i) return;
-                    let prodId = i.id || i.productId || "";
-                    let prod = products.find(p => String(p.id).trim() === String(prodId).trim());
+                let itemsArr = Array.isArray(o.items) ? o.items : [];
+                if(!Array.isArray(itemsArr) && typeof o.items === 'string') { try { itemsArr = JSON.parse(o.items); } catch(e){ itemsArr = []; } }
+                itemsArr.forEach(i => {
+                    let prod = products.find(p => String(p.id).trim() === String(i.id).trim());
                     let catName = prod ? prod.category : "General / Varios";
-                    let qty = Number(i.quantity || i.qty || 1) || 1;
-                    let price = Number(i.price || 0) || 0;
-                    if (prod) cost += ((parseInt(prod.cost) || 0) * qty);
+                    if (prod) cost += ((parseInt(prod.cost) || 0) * i.quantity);
 
                     if (!categoryStats[catName]) {
                         categoryStats[catName] = { qty: 0, total: 0 };
                     }
-                    categoryStats[catName].qty += qty;
-                    categoryStats[catName].total += (price * qty);
+                    categoryStats[catName].qty += i.quantity;
+                    categoryStats[catName].total += (i.price * i.quantity);
                 });
             });
 
@@ -4398,7 +4203,7 @@
 
             let continuousProductStats = {};
             orders.filter(o => o.status !== 'Anulado' && o.status !== 'Cancelado').forEach(o => {
-                o.items.forEach(i => {
+                (Array.isArray(o.items)?o.items:[]).forEach(i => {
                     if(!continuousProductStats[i.name]) {
                         continuousProductStats[i.name] = 0;
                     }
@@ -4503,7 +4308,7 @@
                 o.total = 0; 
                 o.mixedDetails = null;
                 
-                o.items.forEach(item => {
+                (Array.isArray(o.items)?o.items:[]).forEach(item => {
                     let p = products.find(x => String(x.id).trim() === String(item.id).trim());
                     if (p) {
                         p.stock = (p.stock || 0) + item.quantity;
