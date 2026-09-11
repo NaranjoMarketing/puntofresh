@@ -3532,11 +3532,11 @@
         // V19 - SINCRONIZACION AUTOMATICA PEDIDOS -> CLIENTES (SOLUCION DEFINITIVA SERGIO)
         function sincronizarPedidosAClientes() {
             if(!orders || orders.length === 0) {
-                console.log("V19: No hay pedidos para sincronizar");
+                console.log("V20: No hay pedidos para sincronizar");
                 return 0;
             }
             if(!clients || clients.length === 0) {
-                console.log("V19: No hay clientes para sincronizar");
+                console.log("V20: No hay clientes para sincronizar");
                 return 0;
             }
             
@@ -3549,7 +3549,7 @@
                 return true;
             });
             
-            console.log("V19: Pedidos a credito encontrados: " + ordersCredit.length);
+            console.log("V20: Pedidos a credito encontrados: " + ordersCredit.length);
             
             ordersCredit.forEach(function(order){
                 let cname = String(order.clientName).toLowerCase().trim();
@@ -3580,17 +3580,51 @@
                 let existe = client.transactions.some(function(t){ return String(t.id) === String(order.id); });
                 if(existe) return;
                 
-                // Crear transaccion desde pedido
-                let total = Number(order.total || 0);
-                if(total <= 0 && order.items) {
-                    try {
-                        let items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
-                        if(Array.isArray(items)) {
-                            total = items.reduce(function(s,it){ return s + Number(it.price||0)*Number(it.quantity||1); }, 0);
-                        }
-                    } catch(e){}
+                // V20 FIX: Extraer total correctamente de cualquier campo
+                let total = Number(order.total || order.totalAmount || order.monto || 0);
+                if(total <= 0) {
+                    // Probar en todos los campos posibles donde pueden estar los items
+                    let posibles = [order.items, order.items_JSON, order.productos, order.detalle, order.itemsJson];
+                    for(let campo of posibles) {
+                        if(!campo) continue;
+                        try {
+                            let items = campo;
+                            if(typeof campo === 'string') {
+                                // Si es string JSON
+                                if(campo.trim().startsWith('[') || campo.trim().startsWith('{')) {
+                                    items = JSON.parse(campo);
+                                } else {
+                                    continue;
+                                }
+                            }
+                            if(Array.isArray(items) && items.length > 0) {
+                                let suma = items.reduce(function(s,it){
+                                    let p = Number(it.price || it.precio || it.valor || it.unitPrice || 0);
+                                    let q = Number(it.quantity || it.qty || it.cantidad || it.qtyOrdered || 1);
+                                    return s + (p * q);
+                                }, 0);
+                                if(suma > 0) { total = suma; break; }
+                            }
+                            // Si es objeto con productos
+                            if(items && items.productos && Array.isArray(items.productos)) {
+                                let suma = items.productos.reduce(function(s,it){
+                                    return s + Number(it.price||0)*Number(it.quantity||1);
+                                }, 0);
+                                if(suma > 0) { total = suma; break; }
+                            }
+                        } catch(e){}
+                    }
                 }
-                if(total <= 0) return;
+                // Si aun es 0, buscar en campos de total alternativos
+                if(total <= 0) {
+                    total = Number(order.total_final || order.valor_total || order.grandTotal || 0);
+                }
+                console.log("V20: Orden " + order.id + " total calculado: $" + total + " (original: " + order.total + ")");
+                if(total <= 0) {
+                    console.warn("V20: Orden " + order.id + " sin total, omitida. Datos:", order);
+                    // No retornar, crear con total 0 pero marcar para recalcular despues
+                    // return;
+                }
                 
                 client.transactions.push({
                     id: order.id,
@@ -3605,20 +3639,20 @@
             });
             
             if(nuevos > 0) {
-                console.log("V19: Sincronizados " + nuevos + " pedidos a clientes");
+                console.log("V20: Sincronizados " + nuevos + " pedidos a clientes");
                 saveState();
                 // Guardar automaticamente en Sheets si hay nuevos
                 setTimeout(function(){
                     sincronizarConGoogle("syncClients", clients);
-                    console.log("V19: Clientes sincronizados a Google Sheets");
+                    console.log("V20: Clientes sincronizados a Google Sheets");
                 }, 1000);
             }
             return nuevos;
         }
         
         function rebuildClientCreditHistory() {
-            // V19: Esta funcion ahora usa la sincronizacion automatica Pedidos -> Clientes
-            console.log("V19: Reconstruyendo historial desde Pedidos...");
+            // V20: Esta funcion ahora usa la sincronizacion automatica Pedidos -> Clientes
+            console.log("V20: Reconstruyendo historial desde Pedidos...");
             let count = sincronizarPedidosAClientes();
             if(count > 0) {
                 showToast("Sincronizados " + count + " pedidos a credito desde Pedidos", "success");
@@ -3641,12 +3675,12 @@
                 window.loadDataFromCloud = async function() {
                     let result = await original.apply(this, arguments);
                     setTimeout(function(){
-                        console.log("V19: Auto-sincronizacion Pedidos -> Clientes despues de cargar nube");
+                        console.log("V20: Auto-sincronizacion Pedidos -> Clientes despues de cargar nube");
                         sincronizarPedidosAClientes();
                         renderClientsList();
                         let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
                         if(sergio && sergio.transactions) {
-                            console.log("V19: Sergio tiene " + sergio.transactions.length + " transacciones despues de sync");
+                            console.log("V20: Sergio tiene " + sergio.transactions.length + " transacciones despues de sync");
                             let sel = clients.find(function(c){ return c.id === (currentSelectedClient ? currentSelectedClient.id : ''); });
                             if(!sel && sergio.transactions.length > 0) {
                                 currentSelectedClient = sergio;
@@ -3660,10 +3694,66 @@
         }, 1000);
         
         // Auto-sync al iniciar si hay pedidos locales
+        
+        function recalcularTotalesSergio() {
+            console.log("V20: Recalculando totales de Sergio desde Pedidos originales...");
+            let ordersLS = orders || [];
+            let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
+            if(!sergio) { console.log("No se encontro Sergio"); return; }
+            if(!sergio.transactions) sergio.transactions = [];
+            
+            sergio.transactions.forEach(function(tx){
+                if(Number(tx.total) > 0) return; // Ya tiene total
+                let order = ordersLS.find(function(o){ return String(o.id) === String(tx.id); });
+                if(!order) {
+                    console.log("No se encontro orden para " + tx.id);
+                    return;
+                }
+                // Recalcular total de la orden
+                let total = Number(order.total || 0);
+                if(total <= 0) {
+                    let posibles = [order.items, order.items_JSON, order.productos];
+                    for(let campo of posibles) {
+                        if(!campo) continue;
+                        try {
+                            let items = typeof campo === 'string' ? JSON.parse(campo) : campo;
+                            if(Array.isArray(items) && items.length > 0) {
+                                let suma = items.reduce(function(s,it){
+                                    return s + Number(it.price||0)*Number(it.quantity||1);
+                                }, 0);
+                                if(suma > 0) { total = suma; break; }
+                            }
+                        } catch(e){}
+                    }
+                }
+                if(total > 0) {
+                    console.log("V20: Corregido " + tx.id + " de $0 a $" + total);
+                    tx.total = total;
+                }
+            });
+            saveState();
+            renderAccountStatement();
+            renderClientsList();
+            sincronizarConGoogle("syncClients", clients);
+            showToast("Totales recalculados", "success");
+        }
+        
+        // Auto-recalcular al cargar si Sergio tiene $0
+        setTimeout(function(){
+            let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
+            if(sergio && sergio.transactions && sergio.transactions.length > 0) {
+                let conCero = sergio.transactions.filter(function(t){ return Number(t.total) === 0; }).length;
+                if(conCero > 0) {
+                    console.log("V20: Sergio tiene " + conCero + " facturas en $0, recalculando...");
+                    recalcularTotalesSergio();
+                }
+            }
+        }, 4000);
+
         window.addEventListener('load', function(){
             setTimeout(function(){
                 if(orders && orders.length > 0 && clients && clients.length > 0) {
-                    console.log("V19: Auto-sync inicial");
+                    console.log("V20: Auto-sync inicial");
                     sincronizarPedidosAClientes();
                 }
             }, 3000);
