@@ -749,6 +749,7 @@
                             <button onclick="openPastDebtModal()" class="bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-clock-rotate-left"></i> Registrar Deuda Pasada</button>
                             <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
                             <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
+                    <button onclick="forceRebuildAndSync()" class="bg-neutral-800 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1" title="Reconstruir historial desde pedidos"><i class="fa-solid fa-rotate"></i> Sincronizar Historial</button>
                         </div>
                     </div>
                     
@@ -1762,12 +1763,22 @@
             sanitizeProducts();
             sanitizeLegacyOpenTransactions();
             initAdminDashboard();
-            // Forzar render de clientes después de cargar
+            // Forzar render de clientes después de cargar + reconstruir historial
             setTimeout(() => {
+                // Primero reconstruir historial desde Pedidos
+                rebuildClientCreditHistory();
                 renderClientsList();
                 populatePOSClientSelect();
                 console.log("Directorio renderizado. Total clientes:", clients.length);
-            }, 500);
+                // Si hay un cliente seleccionado, refrescar su estado
+                if(currentSelectedClient) {
+                    let fresh = clients.find(c => c.id === currentSelectedClient.id);
+                    if(fresh) {
+                        currentSelectedClient = fresh;
+                        renderAccountStatement();
+                    }
+                }
+            }, 800);
             updateCashRegisterUI();
         }
 
@@ -2798,6 +2809,7 @@
                 date: new Date().toLocaleString(),
                 clientName: finalName,
                 clientPhone: document.getElementById('pos-client-phone').value || "-",
+                clientId: selectedClientId || null, // FIX V4: Guardar ID del cliente para poder reconstruir historial
                 delivery: deliveryType,
                 mesa_o_direccion: originLabel,
                 payment: posPayment,
@@ -3280,7 +3292,70 @@
                 if(t.type === 'payment') return acc - (Number(t.amount) || 0);
                 // annulled = no cuenta
                 return acc;
-            }, 0);
+            }
+
+        // FIX V4: Reconstruir historial de crédito desde Pedidos si faltan transacciones
+        function rebuildClientCreditHistory() {
+            console.log("🔧 Reconstruyendo historial de crédito desde Pedidos...");
+            let fixedCount = 0;
+            let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
+            console.log(`Pedidos a crédito encontrados: ${ordersCredit.length}`);
+
+            ordersCredit.forEach(order => {
+                // Buscar cliente por ID, luego por teléfono, luego por nombre
+                let client = null;
+                if(order.clientId) {
+                    client = clients.find(c => c.id === order.clientId);
+                }
+                if(!client && order.clientPhone && order.clientPhone !== "-") {
+                    client = clients.find(c => c.phone && order.clientPhone.includes(c.phone) || c.phone && order.clientPhone && c.phone === order.clientPhone);
+                }
+                if(!client && order.clientName) {
+                    // Búsqueda por nombre exacto (case insensitive)
+                    client = clients.find(c => c.name.toLowerCase().trim() === order.clientName.toLowerCase().trim());
+                }
+                
+                if(client) {
+                    if(!client.transactions) client.transactions = [];
+                    // Si ya existe una transacción con ese ID de factura, no duplicar
+                    let exists = client.transactions.some(t => String(t.id).trim() === String(order.id).trim() && t.type === 'invoice');
+                    if(!exists) {
+                        console.log(`  + Agregando factura faltante ${order.id} ($${order.total}) a ${client.name}`);
+                        client.transactions.push({
+                            id: order.id,
+                            date: order.date,
+                            type: 'invoice',
+                            total: Number(order.total) || 0,
+                            items: order.items ? (Array.isArray(order.items) ? order.items.map(i => `${i.quantity || i.qty || 1}x ${i.name}`) : order.items) : [],
+                            note: 'Factura POS ' + order.id,
+                            closed: order.closed || false,
+                            recovered: true // marca que fue recuperado
+                        });
+                        fixedCount++;
+                    }
+                } else {
+                    console.warn(`  ! No se encontró cliente para pedido ${order.id} cliente=${order.clientName} tel=${order.clientPhone}`);
+                }
+            });
+
+            if(fixedCount > 0) {
+                console.log(`✅ Se recuperaron ${fixedCount} facturas a crédito faltantes`);
+                saveState();
+                sincronizarConGoogle("syncClients", clients);
+                showToast(`Se recuperaron ${fixedCount} pedidos a crédito que no aparecían en el historial.`, "success");
+                renderClientsList();
+                if(currentSelectedClient) renderAccountStatement();
+            } else {
+                console.log("No había facturas faltantes por recuperar");
+            }
+            return fixedCount;
+        }
+
+        function forceRebuildAndSync() {
+            let count = rebuildClientCreditHistory();
+            if(count === 0) showToast("El historial ya está sincronizado. No hay pedidos faltantes.", "info");
+        }
+, 0);
         }
 
         function renderAccountStatement() {
