@@ -3294,14 +3294,21 @@
             console.log(`Pedidos a crédito encontrados: ${ordersCredit.length}`);
             ordersCredit.forEach(order => {
                 let client = null;
+                // Normalizar teléfono a string siempre
+                let orderPhoneStr = order.clientPhone ? String(order.clientPhone).trim() : "";
                 if(order.clientId) {
                     client = clients.find(c => c.id === order.clientId);
                 }
-                if(!client && order.clientPhone && order.clientPhone !== "-") {
-                    client = clients.find(c => c.phone && (order.clientPhone.includes(c.phone) || c.phone === order.clientPhone));
+                if(!client && orderPhoneStr && orderPhoneStr !== "-" && orderPhoneStr !== "undefined") {
+                    client = clients.find(c => {
+                        if(!c.phone) return false;
+                        let cPhoneStr = String(c.phone).trim();
+                        return orderPhoneStr.includes(cPhoneStr) || cPhoneStr === orderPhoneStr || cPhoneStr.includes(orderPhoneStr);
+                    });
                 }
                 if(!client && order.clientName) {
-                    client = clients.find(c => c.name.toLowerCase().trim() === order.clientName.toLowerCase().trim());
+                    let orderNameNorm = String(order.clientName).toLowerCase().trim();
+                    client = clients.find(c => c.name && String(c.name).toLowerCase().trim() === orderNameNorm);
                 }
                 if(client) {
                     if(!client.transactions) client.transactions = [];
