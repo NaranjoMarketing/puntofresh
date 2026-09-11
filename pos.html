@@ -750,6 +750,7 @@
                             <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
                             <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
                     <button onclick="limpiarDeudasSinRespaldo()" class="bg-amber-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1" title="Eliminar deudas sin factura de respaldo"><i class="fa-solid fa-broom"></i> Limpiar Sin Respaldo</button>
+                    <button onclick="recuperarTodoDePedidos()" class="bg-blue-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1" title="Recuperar todo desde Pedidos"><i class="fa-solid fa-life-ring"></i> Recuperar Todo</button>
                     <button onclick="forceRebuildAndSync()" class="bg-neutral-800 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1"><i class="fa-solid fa-rotate"></i> Sincronizar Historial</button>
                         </div>
                     </div>
@@ -3440,27 +3441,39 @@
             return totalFixed;
         }
         
-        // V8: Limpiar deudas duplicadas sin respaldo en Pedidos
+        // V9: Limpiar con protección + recuperación
         async function limpiarDeudasSinRespaldo() {
             if(!currentSelectedClient) {
                 showToast("Selecciona un cliente primero", "error");
                 return;
             }
-            
-            let confirm = await showCustomConfirm(
-                "Limpiar deudas sin respaldo",
-                `¿Eliminar de ${currentSelectedClient.name} todas las deudas marcadas como (Anterior) o que NO tienen factura en la hoja Pedidos?\n\nEsto corregirá cobros dobles. Se mantendrán solo las facturas con respaldo real.`
-            );
-            if(!confirm) return;
 
-            // Crear set de IDs válidos de Pedidos a crédito
+            // PROTECCIÓN V9: Si Pedidos aún no carga, NO BORRAR
+            if(!orders || orders.length === 0) {
+                showToast("Espera, los pedidos aún están cargando de Google Sheets. Intenta en 5 segundos.", "error");
+                console.log("Orders vacíos, abortando limpieza por seguridad");
+                return;
+            }
+            
             let validOrderIds = new Set(
                 orders
                 .filter(o => o.payment === 'Crédito' && o.status !== 'Anulado')
                 .map(o => String(o.id).trim())
             );
 
-            console.log(`Pedidos válidos a crédito: ${validOrderIds.size}`, Array.from(validOrderIds).slice(0,5));
+            if(validOrderIds.size === 0) {
+                showToast("No hay pedidos a crédito con respaldo. No se puede limpiar por seguridad.", "error");
+                return;
+            }
+
+            console.log(`Pedidos válidos a crédito: ${validOrderIds.size}`, Array.from(validOrderIds).slice(0,10));
+
+            let confirm = await showCustomConfirm(
+                "Limpiar deudas sin respaldo",
+                `Se encontraron ${validOrderIds.size} facturas con respaldo en Pedidos.\n¿Eliminar de ${currentSelectedClient.name} solo las deudas que NO tienen factura en Pedidos (las marcadas como Anterior)?\n\nSe mantendrán: facturas con respaldo + todos los abonos.`
+            );
+            if(!confirm) return;
+
 
             if(!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
             
@@ -3511,15 +3524,23 @@
         }
 
         async function limpiarTodosClientesSinRespaldo() {
-            let confirm = await showCustomConfirm(
-                "Limpieza GLOBAL",
-                `¿Estás seguro de limpiar TODOS los clientes? Se eliminarán de TODOS las deudas que NO tengan factura en Pedidos (las marcadas como Anterior). Esta acción no se puede deshacer.`
-            );
-            if(!confirm) return;
-
+            if(!orders || orders.length === 0) {
+                showToast("Pedidos no cargados aún, abortando por seguridad.", "error");
+                return;
+            }
             let validOrderIds = new Set(
                 orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado').map(o => String(o.id).trim())
             );
+            if(validOrderIds.size === 0) {
+                showToast("No hay pedidos con respaldo, abortando.", "error");
+                return;
+            }
+            let confirm = await showCustomConfirm(
+                "Limpieza GLOBAL",
+                `¿Estás seguro de limpiar TODOS los clientes? Se eliminarán de TODOS las deudas que NO tengan factura en Pedidos (las marcadas como Anterior). Esta acción no se puede deshacer.\n\nPedidos válidos encontrados: ${validOrderIds.size}`
+            );
+            if(!confirm) return;
+
 
             let totalClientesAfectados = 0;
             let totalDeudasEliminadas = 0;
@@ -3556,9 +3577,100 @@
         }
 
         function forceRebuildAndSync() {
+            // V9: Recuperación total
+            if(!orders || orders.length === 0) {
+                showToast("Cargando pedidos desde Sheets... espera 3 segundos y vuelve a intentar.", "info");
+                loadDataFromCloud();
+                return;
+            }
+            console.log("Iniciando recuperación total desde Pedidos...");
             let count = rebuildClientCreditHistory();
-            if(count === 0) showToast("El historial ya está sincronizado.", "info");
+            if(count === 0) {
+                // Si no recuperó nada, forzar re-creación desde cero de todos los clientes
+                let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
+                if(ordersCredit.length > 0 && clients.length > 0) {
+                    // Si hay clientes con 0 transacciones pero sí hay pedidos, reconstruir
+                    let clientsWithoutTx = clients.filter(c => !c.transactions || c.transactions.length === 0).length;
+                    if(clientsWithoutTx > 0) {
+                        showToast(`Hay ${clientsWithoutTx} clientes sin historial. Reconstruyendo desde ${ordersCredit.length} pedidos...`, "info");
+                        // Limpiar y reconstruir todo
+                        clients.forEach(c => { if(!c.transactions || c.transactions.length === 0) c.transactions = []; });
+                        // Llamar de nuevo a rebuild que agregará lo faltante
+                        setTimeout(() => {
+                            let secondCount = rebuildClientCreditHistory();
+                            if(secondCount === 0) {
+                                showToast("Ya está sincronizado. Si no ves deudas, verifica que los pedidos tengan clientId.", "info");
+                            }
+                        }, 500);
+                    } else {
+                        showToast("El historial ya está sincronizado.", "info");
+                    }
+                } else {
+                    showToast("El historial ya está sincronizado.", "info");
+                }
+            }
         }
+        
+        function recuperarTodoDePedidos() {
+            // Botón de emergencia: borra transacciones vacías y reconstruye todo desde Pedidos
+            if(!orders || orders.length === 0) {
+                showToast("No hay pedidos cargados para recuperar", "error");
+                return;
+            }
+            console.log("RECUPERACIÓN DE EMERGENCIA: Reconstruyendo todo desde Pedidos");
+            let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
+            console.log(`Total pedidos a crédito a recuperar: ${ordersCredit.length}`);
+            
+            // Para cada pedido, asegurar que esté en su cliente
+            let recovered = 0;
+            ordersCredit.forEach(order => {
+                let client = null;
+                let orderIdStr = order.clientId ? String(order.clientId).trim() : "";
+                let orderPhoneStr = order.clientPhone ? String(order.clientPhone).trim() : "";
+                let orderNameNorm = order.clientName ? String(order.clientName).toLowerCase().trim() : "";
+                
+                if(orderIdStr) client = clients.find(c => String(c.id).trim() === orderIdStr);
+                if(!client && orderPhoneStr && orderPhoneStr !== "-") {
+                    client = clients.find(c => { if(!c.phone) return false; let cPhoneStr = String(c.phone).trim(); return orderPhoneStr.includes(cPhoneStr) || cPhoneStr === orderPhoneStr || cPhoneStr.includes(orderPhoneStr); });
+                }
+                if(!client && orderNameNorm) {
+                    client = clients.find(c => c.name && String(c.name).toLowerCase().trim() === orderNameNorm);
+                }
+                
+                if(client) {
+                    if(!client.transactions) client.transactions = [];
+                    let exists = client.transactions.some(t => String(t.id).trim() === String(order.id).trim() && t.type === 'invoice');
+                    if(!exists) {
+                        client.transactions.push({
+                            id: order.id,
+                            date: order.date,
+                            type: 'invoice',
+                            total: Number(order.total) || 0,
+                            items: order.items ? (Array.isArray(order.items) ? order.items.map(i => `${i.quantity || i.qty || 1}x ${i.name}`) : []) : [],
+                            note: 'Factura POS ' + order.id,
+                            closed: order.closed || false,
+                            recovered: true
+                        });
+                        recovered++;
+                    }
+                }
+            });
+            
+            if(recovered > 0) {
+                saveState();
+                sincronizarConGoogle("syncClients", clients);
+                renderClientsList();
+                if(currentSelectedClient) {
+                    let fresh = clients.find(c => c.id === currentSelectedClient.id);
+                    if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
+                }
+                showToast(`¡Recuperados ${recovered} pedidos a crédito!`, "success");
+            } else {
+                showToast("No había nada que recuperar, todo ya está en los clientes", "info");
+            }
+            return recovered;
+        }
+
 
         function renderAccountStatement() {
             // FIX: Refrescar referencia a cliente actual desde array principal (evita objeto stale)
