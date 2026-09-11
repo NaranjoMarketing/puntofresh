@@ -3529,6 +3529,147 @@
             if(count === 0) showToast("El historial ya está sincronizado.", "info");
         }
 
+        // V19 - SINCRONIZACION AUTOMATICA PEDIDOS -> CLIENTES (SOLUCION DEFINITIVA SERGIO)
+        function sincronizarPedidosAClientes() {
+            if(!orders || orders.length === 0) {
+                console.log("V19: No hay pedidos para sincronizar");
+                return 0;
+            }
+            if(!clients || clients.length === 0) {
+                console.log("V19: No hay clientes para sincronizar");
+                return 0;
+            }
+            
+            let nuevos = 0;
+            let ordersCredit = orders.filter(function(o){
+                if(!o.clientName) return false;
+                let n = String(o.clientName).toLowerCase().trim();
+                if(n === '' || n === '-' || n === 'mostrador' || n.indexOf('mostrador') !== -1) return false;
+                if(n.indexOf('rapida') !== -1 || n === 'domicilio - punto de -') return false;
+                return true;
+            });
+            
+            console.log("V19: Pedidos a credito encontrados: " + ordersCredit.length);
+            
+            ordersCredit.forEach(function(order){
+                let cname = String(order.clientName).toLowerCase().trim();
+                let phone = String(order.clientPhone || '').trim();
+                let client = null;
+                
+                // Buscar cliente por telefono primero (mas exacto)
+                if(phone && phone.length >= 7) {
+                    client = clients.find(function(c){ return String(c.phone||'').trim() === phone; });
+                }
+                // Por nombre exacto
+                if(!client) {
+                    client = clients.find(function(c){ return String(c.name||'').toLowerCase().trim() === cname; });
+                }
+                // Por coincidencia parcial
+                if(!client) {
+                    client = clients.find(function(c){ 
+                        let cn = String(c.name||'').toLowerCase().trim();
+                        return cname.indexOf(cn) !== -1 || cn.indexOf(cname) !== -1;
+                    });
+                }
+                
+                if(!client) return;
+                
+                if(!client.transactions) client.transactions = [];
+                
+                // Si ya existe transaccion con mismo ID, no duplicar
+                let existe = client.transactions.some(function(t){ return String(t.id) === String(order.id); });
+                if(existe) return;
+                
+                // Crear transaccion desde pedido
+                let total = Number(order.total || 0);
+                if(total <= 0 && order.items) {
+                    try {
+                        let items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+                        if(Array.isArray(items)) {
+                            total = items.reduce(function(s,it){ return s + Number(it.price||0)*Number(it.quantity||1); }, 0);
+                        }
+                    } catch(e){}
+                }
+                if(total <= 0) return;
+                
+                client.transactions.push({
+                    id: order.id,
+                    date: order.date,
+                    type: 'invoice',
+                    total: total,
+                    items: [],
+                    note: 'Factura POS ' + order.id,
+                    autoSync: true
+                });
+                nuevos++;
+            });
+            
+            if(nuevos > 0) {
+                console.log("V19: Sincronizados " + nuevos + " pedidos a clientes");
+                saveState();
+                // Guardar automaticamente en Sheets si hay nuevos
+                setTimeout(function(){
+                    sincronizarConGoogle("syncClients", clients);
+                    console.log("V19: Clientes sincronizados a Google Sheets");
+                }, 1000);
+            }
+            return nuevos;
+        }
+        
+        function rebuildClientCreditHistory() {
+            // V19: Esta funcion ahora usa la sincronizacion automatica Pedidos -> Clientes
+            console.log("V19: Reconstruyendo historial desde Pedidos...");
+            let count = sincronizarPedidosAClientes();
+            if(count > 0) {
+                showToast("Sincronizados " + count + " pedidos a credito desde Pedidos", "success");
+                renderClientsList();
+                if(currentSelectedClient) {
+                    let fresh = clients.find(function(c){ return c.id === currentSelectedClient.id; });
+                    if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
+                }
+            }
+            return count;
+        }
+        
+        // Auto-ejecutar sincronizacion cada vez que se cargan datos
+        let originalLoadDataFromCloud = null;
+        setTimeout(function(){
+            // Interceptar loadDataFromCloud para auto-sincronizar despues
+            if(typeof loadDataFromCloud === 'function' && !window._v19Interceptado) {
+                window._v19Interceptado = true;
+                let original = loadDataFromCloud;
+                window.loadDataFromCloud = async function() {
+                    let result = await original.apply(this, arguments);
+                    setTimeout(function(){
+                        console.log("V19: Auto-sincronizacion Pedidos -> Clientes despues de cargar nube");
+                        sincronizarPedidosAClientes();
+                        renderClientsList();
+                        let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
+                        if(sergio && sergio.transactions) {
+                            console.log("V19: Sergio tiene " + sergio.transactions.length + " transacciones despues de sync");
+                            let sel = clients.find(function(c){ return c.id === (currentSelectedClient ? currentSelectedClient.id : ''); });
+                            if(!sel && sergio.transactions.length > 0) {
+                                currentSelectedClient = sergio;
+                                renderAccountStatement();
+                            }
+                        }
+                    }, 2000);
+                    return result;
+                };
+            }
+        }, 1000);
+        
+        // Auto-sync al iniciar si hay pedidos locales
+        window.addEventListener('load', function(){
+            setTimeout(function(){
+                if(orders && orders.length > 0 && clients && clients.length > 0) {
+                    console.log("V19: Auto-sync inicial");
+                    sincronizarPedidosAClientes();
+                }
+            }, 3000);
+        });
+
+
         function getOrderTotalSafe(order) {
             let t = Number(order.total || 0);
             if(t > 0) return t;
