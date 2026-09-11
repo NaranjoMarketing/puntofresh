@@ -3324,7 +3324,7 @@
             let fixedAbonos = 0;
             
             // 1. Recuperar facturas faltantes desde Pedidos
-            let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
+            let ordersCredit = orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); let isCredit = pay.includes('cred') || pay.includes('crédito') || pay.includes('credito'); let notAnulado = String(o.status||'').toLowerCase() !== 'anulado'; return isCredit && notAnulado; });
             console.log(`Pedidos a crédito encontrados: ${ordersCredit.length}`);
             ordersCredit.forEach(order => {
                 let client = null;
@@ -3457,7 +3457,7 @@
             
             let validOrderIds = new Set(
                 orders
-                .filter(o => o.payment === 'Crédito' && o.status !== 'Anulado')
+                .filter(o => { let pay = String(o.payment||'').toLowerCase(); return pay.includes('cred') && String(o.status||'').toLowerCase() !== 'anulado'; })
                 .map(o => String(o.id).trim())
             );
 
@@ -3529,7 +3529,7 @@
                 return;
             }
             let validOrderIds = new Set(
-                orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado').map(o => String(o.id).trim())
+                orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); return (pay.includes('cred') && String(o.status||'').toLowerCase() !== 'anulado'); }).map(o => String(o.id).trim())
             );
             if(validOrderIds.size === 0) {
                 showToast("No hay pedidos con respaldo, abortando.", "error");
@@ -3592,7 +3592,7 @@
             let count = rebuildClientCreditHistory();
             if(count === 0) {
                 // Si no recuperó nada, forzar re-creación desde cero de todos los clientes
-                let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
+                let ordersCredit = orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); let isCredit = pay.includes('cred') || pay.includes('crédito') || pay.includes('credito'); let notAnulado = String(o.status||'').toLowerCase() !== 'anulado'; return isCredit && notAnulado; });
                 if(ordersCredit.length > 0 && clients.length > 0) {
                     // Si hay clientes con 0 transacciones pero sí hay pedidos, reconstruir
                     let clientsWithoutTx = clients.filter(c => !c.transactions || c.transactions.length === 0).length;
@@ -3617,14 +3617,17 @@
         }
         
         function recuperarTodoDePedidos() {
-            // V9.1: Recuperación forzada desde localStorage + Sheets
+            // V9.2: Recuperación forzada robusta - detecta Crédito con o sin tilde
             let ordersLocal = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
+            console.log(`DEBUG Orders memoria: ${orders ? orders.length : 0}, localStorage: ${ordersLocal.length}`);
+            
             if((!orders || orders.length === 0) && ordersLocal.length > 0) {
-                console.log(`Orders en memoria vacíos, usando localStorage: ${ordersLocal.length}`);
+                console.log(`Usando localStorage: ${ordersLocal.length} pedidos`);
                 orders = ordersLocal;
             }
+            
             if(!orders || orders.length === 0) {
-                showToast("No hay pedidos cargados. Recargando desde Google Sheets...", "info");
+                showToast("No hay pedidos cargados. Recargando desde Sheets...", "info");
                 loadDataFromCloud();
                 setTimeout(() => {
                     let ordersAfter = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
@@ -3638,8 +3641,17 @@
                 }, 3000);
                 return;
             }
+
+            // DIAGNÓSTICO: qué tipos de pago hay
+            let pagos = {};
+            orders.forEach(o => {
+                let p = String(o.payment || 'SIN PAGO').trim();
+                pagos[p] = (pagos[p]||0)+1;
+            });
+            console.log("Distribución de pagos en pedidos:", pagos);
+            
             console.log("RECUPERACIÓN DE EMERGENCIA: Reconstruyendo todo desde Pedidos");
-            let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
+            let ordersCredit = orders.filter(o => { let pay = String(o.payment||'').toLowerCase(); let isCredit = pay.includes('cred') || pay.includes('crédito') || pay.includes('credito'); let notAnulado = String(o.status||'').toLowerCase() !== 'anulado'; return isCredit && notAnulado; });
             console.log(`Total pedidos a crédito a recuperar: ${ordersCredit.length}`);
             
             // Para cada pedido, asegurar que esté en su cliente
@@ -3677,6 +3689,7 @@
                 }
             });
             
+            console.log(`Pedidos a crédito detectados (filtro flexible): ${ordersCredit.length}`, ordersCredit.slice(0,3));
             if(recovered > 0) {
                 saveState();
                 sincronizarConGoogle("syncClients", clients);
@@ -3687,7 +3700,12 @@
                 }
                 showToast(`¡Recuperados ${recovered} pedidos a crédito!`, "success");
             } else {
-                showToast("No había nada que recuperar, todo ya está en los clientes", "info");
+                if(ordersCredit.length === 0) {
+                    showToast(`Hay ${orders.length} pedidos pero ninguno marcado como crédito. Revisa la hoja Pedidos columna payment.`, "error");
+                    console.log("Primeros 3 pedidos:", orders.slice(0,3));
+                } else {
+                    showToast("No había nada nuevo que recuperar, todo ya está en los clientes", "info");
+                }
             }
             return recovered;
         }
