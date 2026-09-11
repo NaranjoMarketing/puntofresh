@@ -3469,7 +3469,7 @@
         
         // V8: Limpiar deudas duplicadas sin respaldo en Pedidos
         // V16 - LIMPIEZA ULTRA SIMPLE: SOLO BORRA (Anterior)
-        async function limpiarDeudasSinRespaldo() {
+                async function limpiarDeudasSinRespaldo() {
             if(!currentSelectedClient) { showToast("Selecciona un cliente", "error"); return; }
             let tx = currentSelectedClient.transactions || [];
             let aBorrar = tx.filter(function(t) {
@@ -3482,18 +3482,8 @@
                 return;
             }
             let total = aBorrar.reduce(function(s,t){ return s + Number(t.total||0); }, 0);
-            let lista = aBorrar.map(function(a){ return a.id + " - $" + Number(a.total).toLocaleString(); }).join("
-");
-            let confirm = await showCustomConfirm(
-                "Eliminar solo (Anterior)",
-                "Se encontraron " + aBorrar.length + " deudas con (Anterior) en " + currentSelectedClient.name + ":
-
-" + lista + "
-
-Total: $" + total.toLocaleString() + "
-
-Borrar SOLO estas?"
-            );
+            let lista = aBorrar.map(function(a){ return a.id + " - $" + Number(a.total).toLocaleString(); }).join(", ");
+            let confirm = await showCustomConfirm("Eliminar solo (Anterior)", "Se encontraron " + aBorrar.length + " deudas con (Anterior) en " + currentSelectedClient.name + ": " + lista + ". Total: $" + total.toLocaleString() + ". Borrar SOLO estas?");
             if(!confirm) return;
             currentSelectedClient.transactions = tx.filter(function(t){ return aBorrar.indexOf(t) === -1; });
             saveState();
