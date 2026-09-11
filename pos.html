@@ -2784,6 +2784,8 @@
                     items: newOrder.items.map(i => `${i.quantity}x ${i.name}`),
                     closed: false 
                 });
+                // FIX: Sincronizar directorio de clientes a Google Sheets inmediatamente
+                sincronizarConGoogle("syncClients", clients);
             }
 
             if (imprimir) {
@@ -2817,7 +2819,14 @@
             sincronizarConGoogle("syncProducts", products);
 
             saveState(); clearPOSCart(); renderBillingTables(); renderHistory(); renderFinances();
-            if (posPayment === 'Crédito') renderClientsList();
+            if (posPayment === 'Crédito') {
+                renderClientsList();
+                if(currentSelectedClient && currentSelectedClient.id === clientForCredit.id) {
+                    // Si estamos viendo al mismo cliente, refrescar su estado de cuenta
+                    currentSelectedClient = clients.find(c => c.id === clientForCredit.id);
+                    renderAccountStatement();
+                }
+            }
             showToast("Venta facturada correctamente.", "success");
         }
 
@@ -3913,6 +3922,28 @@
                 renderHistory();
                 renderFinances();
                 renderClientsList();
+                // FIX: Si la factura era a crédito, revertir transacción del cliente
+                try {
+                    let o = orders.find(x => String(x.id).trim() === String(id).trim());
+                    // Buscar cliente que tenga esa factura
+                    if(o && o.payment === 'Crédito') {
+                        clients.forEach(c => {
+                            if(c.transactions) {
+                                let tIdx = c.transactions.findIndex(t => String(t.id).trim() === String(id).trim() && t.type === 'invoice');
+                                if(tIdx >= 0) {
+                                    // Marcar como anulada en vez de borrar para mantener auditoría
+                                    c.transactions[tIdx].type = 'annulled';
+                                    c.transactions[tIdx].annulledAt = new Date().toLocaleString();
+                                }
+                            }
+                        });
+                        saveState();
+                        sincronizarConGoogle("syncClients", clients);
+                        renderClientsList();
+                        if(currentSelectedClient) renderAccountStatement();
+                    }
+                } catch(e) { console.warn("No se pudo revertir crédito", e); }
+
                 showToast(`Factura ${id} anulada con éxito. Descontada de caja inmediatamente.`, "success");
             }
         }
@@ -4052,3 +4083,4 @@
     </script>
 </body>
 </html>
+
