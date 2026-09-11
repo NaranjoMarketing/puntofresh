@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- V11.0 FINAL FIX DEFINITIVO RECUPERACION SERGIO 2026-05-13 2026-05-13 ULTRA RECUPERACION -->
+    <!-- V15.0 LIMPIEZA SOLO ANTERIOR - FIX SERGIO NO SE BORRA 2026-05-13 RECUPERACION SERGIO 2026-05-13 2026-05-13 ULTRA RECUPERACION -->
 <title>PUNTO FRESH V10 FINAL - Punto Fresh - Panel de Administración y POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -1310,17 +1310,7 @@
             const configUser = localStorage.getItem(DB_PREFIX + 'adminUser') || 'admin';
             const configPass = localStorage.getItem(DB_PREFIX + 'adminPass') || 'fresh123';
 
-            console.log('Login intento:', user, 'Guardado:', configUser, configPass);
-
-            if(pass === 'reset123') {
-                localStorage.setItem(DB_PREFIX + 'adminUser', 'admin');
-                localStorage.setItem(DB_PREFIX + 'adminPass', 'fresh123');
-                localStorage.setItem(DB_PREFIX + 'adminPIN', '0000');
-                localStorage.setItem(DB_PREFIX + 'sessionActive', 'true');
-                showToast('Reseteado a admin / fresh123', 'success');
-                checkSession();
-                return;
-            }
+            console.log('Intento:', user, pass, 'Guardado:', configUser, configPass);
 
             if (user === configUser && pass === configPass) {
                 localStorage.setItem(DB_PREFIX + 'sessionActive', 'true');
@@ -3461,30 +3451,94 @@
         }
         
         // V8: Limpiar deudas duplicadas sin respaldo en Pedidos
+        // V15 - LIMPIEZA ULTRA SIMPLE: SOLO BORRA (Anterior) - NUNCA TOCA FACTURAS POS NI RECUPERADO
         async function limpiarDeudasSinRespaldo() {
             if(!currentSelectedClient) { showToast("Selecciona un cliente", "error"); return; }
-            if(!orders || orders.length === 0) {
-                let ls = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-                if(ls.length > 0) orders = ls; else { showToast("Pedidos no cargados aún, espera 5s", "error"); return; }
-            }
-            let validIds = new Set(orders.filter(o => o.clientName).map(o => String(o.id).trim()));
-            if(validIds.size === 0) { showToast("No hay pedidos válidos", "error"); return; }
-            let confirm = await showCustomConfirm("Limpiar", `Se encontraron ${validIds.size} facturas. ¿Eliminar de ${currentSelectedClient.name} solo las deudas sin respaldo (Anterior)?`);
-            if(!confirm) return;
-            let before = currentSelectedClient.transactions ? currentSelectedClient.transactions.length : 0;
-            currentSelectedClient.transactions = (currentSelectedClient.transactions||[]).filter(t => {
-                if(t.type === 'payment') return true;
-                return validIds.has(String(t.id).trim());
+            
+            let tx = currentSelectedClient.transactions || [];
+            // Solo las que tienen (Anterior) en la fecha
+            let aBorrar = tx.filter(t => {
+                if(t.type !== 'invoice') return false;
+                let fecha = String(t.date || '');
+                return fecha.includes('(Anterior)');
             });
-            let removed = before - currentSelectedClient.transactions.length;
+            
+            if(aBorrar.length === 0) {
+                showToast("Este cliente no tiene deudas con (Anterior). Ya está limpio.", "info");
+                return;
+            }
+            
+            let total = aBorrar.reduce((s,t) => s + Number(t.total||0), 0);
+            let lista = aBorrar.map(a => a.id + " - $" + Number(a.total).toLocaleString()).join("
+");
+            
+            let confirm = await showCustomConfirm(
+                "Eliminar solo (Anterior)",
+                "Se encontraron " + aBorrar.length + " deudas con (Anterior) en " + currentSelectedClient.name + ":
+
+" + lista + "
+
+Total: $" + total.toLocaleString() + "
+
+¿Borrar SOLO estas? Las Facturas POS y Recuperado V10 se mantienen."
+            );
+            if(!confirm) return;
+            
+            currentSelectedClient.transactions = tx.filter(t => !aBorrar.includes(t));
+            
             saveState();
-            sincronizarConGoogle("syncClients", clients);
+            // NO sincronizar automáticamente con Google para no borrar a Sergio, solo local
+            // sincronizarConGoogle("syncClients", clients); // Comentado en V15
             renderAccountStatement();
             renderClientsList();
-            showToast(`Eliminadas ${removed} deudas sin respaldo`, "success");
+            
+            showToast("Borradas " + aBorrar.length + " deudas (Anterior) - $" + total.toLocaleString() + ". Dale a Sincronizar Historial cuando termines con todos.", "success");
         }
+        
         async function limpiarTodosClientesSinRespaldo() {
-            showToast("Usa el botón individual por seguridad", "info");
+            let todosAnterior = [];
+            clients.forEach(c => {
+                (c.transactions||[]).forEach(t => {
+                    if(t.type === 'invoice' && String(t.date||'').includes('(Anterior)')) {
+                        todosAnterior.push({cliente: c.name, id: t.id, total: t.total});
+                    }
+                });
+            });
+            
+            if(todosAnterior.length === 0) {
+                showToast("No hay deudas (Anterior) en ningún cliente", "info");
+                return;
+            }
+            
+            let confirm = await showCustomConfirm(
+                "Limpieza Global (Anterior)",
+                "Se encontraron " + todosAnterior.length + " deudas con (Anterior) en total. ¿Borrarlas todas? Solo se borran las que dicen (Anterior)."
+            );
+            if(!confirm) return;
+            
+            let count = 0;
+            clients.forEach(c => {
+                let before = (c.transactions||[]).length;
+                c.transactions = (c.transactions||[]).filter(t => {
+                    if(t.type !== 'invoice') return true;
+                    return !String(t.date||'').includes('(Anterior)');
+                });
+                count += before - (c.transactions||[]).length;
+            });
+            
+            saveState();
+            renderClientsList();
+            if(currentSelectedClient) {
+                let fresh = clients.find(x => x.id === currentSelectedClient.id);
+                if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
+            }
+            showToast("Limpieza global: " + count + " deudas (Anterior) borradas. Ahora dale a Sincronizar Historial.", "success");
+        }
+        
+        // V15 - Botón para subir manualmente a Sheets cuando todo esté limpio
+        function sincronizarHistorialManual() {
+            sincronizarConGoogle("syncClients", clients);
+            showToast("Subiendo historial limpio a Google Sheets...", "info");
         }
 
         function forceRebuildAndSync() {
