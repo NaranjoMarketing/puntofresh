@@ -1227,6 +1227,7 @@
         let purchasesHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'purchases')) || [];
         let pendingWebOrders = JSON.parse(localStorage.getItem(DB_PREFIX + 'pendingWebOrders')) || [];
         let clients = JSON.parse(localStorage.getItem(DB_PREFIX + 'clients')) || [];
+        window.abonosHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'abonos') || '[]');
         let mesas = JSON.parse(localStorage.getItem(DB_PREFIX + 'mesas_v2')) || [];
         let cashAdjustments = JSON.parse(localStorage.getItem(DB_PREFIX + 'cashAdjustments')) || [];
 
@@ -1723,6 +1724,15 @@
                                 console.log("⬆️ Subiendo clientes locales a Sheets para respaldar...");
                                 sincronizarConGoogle("syncClients", clients);
                             }
+                        }
+
+                        // V6: Cargar abonos desde Sheets
+                        if(data.abonos && Array.isArray(data.abonos) && data.abonos.length > 0) {
+                            console.log(`✅ Abonos cargados de Sheets: ${data.abonos.length}`);
+                            window.abonosHistory = data.abonos;
+                            localStorage.setItem(DB_PREFIX + 'abonos', JSON.stringify(data.abonos));
+                        } else {
+                            window.abonosHistory = JSON.parse(localStorage.getItem(DB_PREFIX + 'abonos') || '[]');
                         }
 
                         companyPhone = "3213169929"; 
@@ -3286,25 +3296,22 @@
             }, 0);
         }
 
-        // FIX V4: Reconstruir historial de crédito desde Pedidos si faltan transacciones
+        // FIX V6: Reconstrucción completa desde Pedidos + Abonos
         function rebuildClientCreditHistory() {
-            console.log("🔧 Reconstruyendo historial de crédito desde Pedidos...");
-            let fixedCount = 0;
+            console.log("🔧 V6: Reconstruyendo historial completo desde Pedidos + Abonos...");
+            let fixedInvoices = 0;
+            let fixedAbonos = 0;
+            
+            // 1. Recuperar facturas faltantes desde Pedidos
             let ordersCredit = orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado');
             console.log(`Pedidos a crédito encontrados: ${ordersCredit.length}`);
             ordersCredit.forEach(order => {
                 let client = null;
-                // Normalizar teléfono a string siempre
                 let orderPhoneStr = order.clientPhone ? String(order.clientPhone).trim() : "";
-                if(order.clientId) {
-                    client = clients.find(c => c.id === order.clientId);
-                }
+                let orderIdStr = order.clientId ? String(order.clientId).trim() : "";
+                if(orderIdStr) client = clients.find(c => String(c.id).trim() === orderIdStr);
                 if(!client && orderPhoneStr && orderPhoneStr !== "-" && orderPhoneStr !== "undefined") {
-                    client = clients.find(c => {
-                        if(!c.phone) return false;
-                        let cPhoneStr = String(c.phone).trim();
-                        return orderPhoneStr.includes(cPhoneStr) || cPhoneStr === orderPhoneStr || cPhoneStr.includes(orderPhoneStr);
-                    });
+                    client = clients.find(c => { if(!c.phone) return false; let cPhoneStr = String(c.phone).trim(); return orderPhoneStr.includes(cPhoneStr) || cPhoneStr === orderPhoneStr || cPhoneStr.includes(orderPhoneStr); });
                 }
                 if(!client && order.clientName) {
                     let orderNameNorm = String(order.clientName).toLowerCase().trim();
@@ -3314,30 +3321,60 @@
                     if(!client.transactions) client.transactions = [];
                     let exists = client.transactions.some(t => String(t.id).trim() === String(order.id).trim() && t.type === 'invoice');
                     if(!exists) {
-                        console.log(`  + Agregando factura faltante ${order.id} ($${order.total}) a ${client.name}`);
+                        console.log(`  + Factura faltante ${order.id} ($${order.total}) -> ${client.name}`);
                         client.transactions.push({
-                            id: order.id,
-                            date: order.date,
-                            type: 'invoice',
+                            id: order.id, date: order.date, type: 'invoice',
                             total: Number(order.total) || 0,
                             items: order.items ? (Array.isArray(order.items) ? order.items.map(i => `${i.quantity || i.qty || 1}x ${i.name}`) : []) : [],
-                            note: 'Factura POS ' + order.id,
-                            closed: order.closed || false,
-                            recovered: true
+                            note: 'Factura POS ' + order.id, closed: order.closed || false, recovered: true
                         });
-                        fixedCount++;
+                        fixedInvoices++;
                     }
                 }
             });
-            if(fixedCount > 0) {
-                console.log(`✅ Se recuperaron ${fixedCount} facturas`);
+
+            // 2. Recuperar abonos faltantes desde hoja Abonos
+            let abonosSheet = window.abonosHistory || [];
+            console.log(`Abonos en hoja Abonos: ${abonosSheet.length}`);
+            abonosSheet.forEach(ab => {
+                let client = null;
+                let abClientId = ab.clientId ? String(ab.clientId).trim() : "";
+                let abPhoneStr = ab.clientPhone ? String(ab.clientPhone).trim() : "";
+                let abNameNorm = ab.clientName ? String(ab.clientName).toLowerCase().trim() : "";
+                if(abClientId) client = clients.find(c => String(c.id).trim() === abClientId);
+                if(!client && abPhoneStr && abPhoneStr !== "-") {
+                    client = clients.find(c => { if(!c.phone) return false; let cPhoneStr = String(c.phone).trim(); return abPhoneStr.includes(cPhoneStr) || cPhoneStr === abPhoneStr || cPhoneStr.includes(abPhoneStr); });
+                }
+                if(!client && abNameNorm) {
+                    client = clients.find(c => c.name && String(c.name).toLowerCase().trim() === abNameNorm);
+                }
+                if(client) {
+                    if(!client.transactions) client.transactions = [];
+                    let exists = client.transactions.some(t => String(t.id).trim() === String(ab.id).trim() && t.type === 'payment');
+                    if(!exists) {
+                        console.log(`  + Abono faltante ${ab.id} ($${ab.amount}) -> ${client.name}`);
+                        client.transactions.push({
+                            id: ab.id, date: ab.date, type: 'payment',
+                            amount: Number(ab.amount) || 0,
+                            closed: false, recoveredAbono: true, note: ab.note || "Abono recuperado"
+                        });
+                        fixedAbonos++;
+                    }
+                }
+            });
+
+            let totalFixed = fixedInvoices + fixedAbonos;
+            if(totalFixed > 0) {
+                console.log(`✅ Recuperados: ${fixedInvoices} facturas + ${fixedAbonos} abonos = ${totalFixed}`);
                 saveState();
                 sincronizarConGoogle("syncClients", clients);
-                showToast(`Se recuperaron ${fixedCount} pedidos a crédito que no aparecían.`, "success");
+                showToast(`Recuperados ${fixedInvoices} pedidos y ${fixedAbonos} abonos faltantes.`, "success");
                 renderClientsList();
                 if(currentSelectedClient) renderAccountStatement();
+            } else {
+                console.log("Historial completo, nada por recuperar");
             }
-            return fixedCount;
+            return totalFixed;
         }
         function forceRebuildAndSync() {
             let count = rebuildClientCreditHistory();
@@ -3447,16 +3484,21 @@
             if (!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
             
             const newTransaction = {
-                id: "ABO-" + Math.floor(1000 + Math.random() * 9000),
+                id: "ABO-" + Date.now() + "-" + Math.floor(Math.random()*1000),
                 date: new Date().toLocaleString(),
                 type: 'payment',
                 amount: amount,
-                closed: false 
+                closed: false,
+                clientId: currentSelectedClient.id,
+                clientName: currentSelectedClient.name,
+                clientPhone: currentSelectedClient.phone
             };
 
             currentSelectedClient.transactions.push(newTransaction);
             saveState();
             sincronizarConGoogle("syncClients", clients);
+            // V6: Guardar abono en hoja segura Abonos (append-only, nunca se borra)
+            sincronizarConGoogle("saveAbono", newTransaction);
 
             closeAbonoModal();
             renderAccountStatement();
@@ -3466,7 +3508,7 @@
 
         async function settleClientBalance() {
             if (!currentSelectedClient) return;
-            let balance = (currentSelectedClient.transactions || []).reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+            let balance = getClientBalance(currentSelectedClient);
             if (balance <= 0) {
                 showToast("El cliente no tiene saldo pendiente.", "info");
                 return;
@@ -3476,16 +3518,23 @@
             if (!confirmSettle) return;
 
             if (!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
-            currentSelectedClient.transactions.push({
-                id: "LIQ-" + Math.floor(1000 + Math.random() * 9000),
+            let liqTx = {
+                id: "LIQ-" + Date.now() + "-" + Math.floor(Math.random()*1000),
                 date: new Date().toLocaleString(),
                 type: 'payment',
                 amount: balance,
-                closed: false
-            });
+                closed: false,
+                clientId: currentSelectedClient.id,
+                clientName: currentSelectedClient.name,
+                clientPhone: currentSelectedClient.phone,
+                note: "Liquidación total"
+            };
+            currentSelectedClient.transactions.push(liqTx);
 
             saveState();
             sincronizarConGoogle("syncClients", clients);
+            sincronizarConGoogle("saveAbono", liqTx);
+
             renderAccountStatement();
             renderClientsList();
             showToast("Deuda del cliente liquidada completamente.", "success");
