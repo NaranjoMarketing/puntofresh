@@ -3221,7 +3221,7 @@
             }
 
             filtered.forEach(c => {
-                let balance = (c.transactions || []).reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+                let balance = (typeof getClientBalance === 'function') ? getClientBalance(c) : (c.transactions || []).reduce((acc, t) => acc + (t.type === 'invoice' ? (Number(t.total)||0) : -(Number(t.amount)||0)), 0);
                 container.innerHTML += `
                     <div class="w-full p-3 rounded-xl border border-fresh-pink/20 bg-neutral-50 hover:bg-fresh-lightPurple flex justify-between items-center transition-all shadow-sm group">
                         <button onclick="selectClient('${c.id}')" class="text-left flex-grow overflow-hidden pr-2">
@@ -3252,8 +3252,19 @@
         }
 
         function selectClient(id) {
+            console.log("Seleccionando cliente:", id, "Total clientes:", clients.length);
             currentSelectedClient = clients.find(c => c.id === id);
-            if(!currentSelectedClient) return;
+            if(!currentSelectedClient) {
+                console.error("Cliente no encontrado:", id);
+                showToast("Cliente no encontrado. Recarga desde Sheets.", "error");
+                return;
+            }
+            // Asegurar transacciones array
+            if(typeof currentSelectedClient.transactions === 'string') {
+                try { currentSelectedClient.transactions = JSON.parse(currentSelectedClient.transactions); } catch(e){ currentSelectedClient.transactions = []; }
+            }
+            if(!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
+            
             document.getElementById('client-empty-state').classList.add('hidden');
             const panel = document.getElementById('client-statement-panel');
             panel.classList.remove('hidden');
@@ -3261,14 +3272,37 @@
             renderAccountStatement();
         }
 
+        // FIX V3: Calcular saldo y historial de forma robusta y siempre con referencia fresca
+        function getClientBalance(client) {
+            if(!client || !client.transactions) return 0;
+            return client.transactions.reduce((acc, t) => {
+                if(t.type === 'invoice') return acc + (Number(t.total) || 0);
+                if(t.type === 'payment') return acc - (Number(t.amount) || 0);
+                // annulled = no cuenta
+                return acc;
+            }, 0);
+        }
+
         function renderAccountStatement() {
+            // FIX: Refrescar referencia a cliente actual desde array principal (evita objeto stale)
+            if(currentSelectedClient) {
+                let fresh = clients.find(c => c.id === currentSelectedClient.id);
+                if(fresh) currentSelectedClient = fresh;
+            }
             if(!currentSelectedClient) return;
+            
+            // Normalizar transacciones por si vienen de Sheets como string
+            if(typeof currentSelectedClient.transactions === 'string') {
+                try { currentSelectedClient.transactions = JSON.parse(currentSelectedClient.transactions); } catch(e){ currentSelectedClient.transactions = []; }
+            }
+            if(!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
+
             document.getElementById('stmt-name').innerText = currentSelectedClient.name;
             document.getElementById('stmt-phone').innerText = currentSelectedClient.phone || "Sin teléfono";
             document.getElementById('stmt-address').innerText = currentSelectedClient.address || "Sin dirección";
 
-            let maxCredit = currentSelectedClient.maxCredit || 0;
-            let balance = (currentSelectedClient.transactions || []).reduce((acc, t) => acc + (t.type === 'invoice' ? t.total : -t.amount), 0);
+            let maxCredit = Number(currentSelectedClient.maxCredit) || 0;
+            let balance = getClientBalance(currentSelectedClient);
             let available = Math.max(0, maxCredit - balance);
 
             document.getElementById('stmt-limit').innerText = `$${maxCredit.toLocaleString()}`;
@@ -3278,23 +3312,44 @@
             const rows = document.getElementById('stmt-transactions-rows');
             rows.innerHTML = '';
             
-            let accum = 0;
-            (currentSelectedClient.transactions || []).forEach(t => {
-                if (t.type === 'invoice') accum += t.total;
-                else if (t.type === 'payment') accum -= t.amount;
-
-                let isInvoice = t.type === 'invoice';
-                let isAnnulled = t.type === 'annulled';
-
-                rows.innerHTML += `
-                    <tr class="hover:bg-neutral-50 text-xs ${isAnnulled ? 'opacity-50 line-through' : ''}">
-                        <td class="p-3">${t.date}</td>
-                        <td class="p-3 font-medium">${isInvoice ? (t.note || 'Factura ' + t.id) : (isAnnulled ? 'Anulado' : 'Abono Recibido')}</td>
-                        <td class="p-3 text-right font-bold text-red-600">${isInvoice ? '$' + t.total.toLocaleString() : '-'}</td>
-                        <td class="p-3 text-right font-bold text-emerald-600">${t.type === 'payment' ? '$' + t.amount.toLocaleString() : '-'}</td>
-                        <td class="p-3 text-right font-black text-fresh-purple">$${accum.toLocaleString()}</td>
-                    </tr>`;
+            // Ordenar por fecha más reciente primero para que el historial se vea actualizado
+            let sortedTx = [...currentSelectedClient.transactions].reverse();
+            
+            let accum = balance; // Empezar desde saldo actual y retroceder? Mejor calcular progresivo desde 0 en orden cronológico
+            // Recalcular acumulado cronológico correcto
+            let chronological = [...currentSelectedClient.transactions];
+            let running = 0;
+            let accumMap = new Map();
+            chronological.forEach(t => {
+                if (t.type === 'invoice') running += Number(t.total) || 0;
+                else if (t.type === 'payment') running -= Number(t.amount) || 0;
+                accumMap.set(t.id + t.date, running);
             });
+
+            if(sortedTx.length === 0) {
+                rows.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-neutral-400 text-xs">Sin movimientos aún. Las ventas a crédito aparecerán aquí.</td></tr>`;
+            } else {
+                sortedTx.forEach(t => {
+                    let runningForThis = accumMap.get(t.id + t.date) || 0;
+                    let isInvoice = t.type === 'invoice';
+                    let isAnnulled = t.type === 'annulled';
+                    let isPayment = t.type === 'payment';
+                    let desc = isInvoice ? (t.note || 'Factura ' + t.id) : (isAnnulled ? 'Anulado: ' + t.id : 'Abono Recibido');
+                    if(isInvoice && t.items) {
+                        desc += `<br><span class="text-[10px] text-neutral-400">${Array.isArray(t.items) ? t.items.join(', ') : t.items}</span>`;
+                    }
+
+                    rows.innerHTML += `
+                        <tr class="hover:bg-neutral-50 text-xs ${isAnnulled ? 'opacity-40 line-through bg-red-50' : ''} ${isPayment ? 'bg-emerald-50/50' : ''}">
+                            <td class="p-3">${t.date}</td>
+                            <td class="p-3 font-medium">${desc}</td>
+                            <td class="p-3 text-right font-bold text-red-600">${isInvoice ? '$' + (Number(t.total)||0).toLocaleString() : '-'}</td>
+                            <td class="p-3 text-right font-bold text-emerald-600">${isPayment ? '$' + (Number(t.amount)||0).toLocaleString() : '-'}</td>
+                            <td class="p-3 text-right font-black text-fresh-purple">$${runningForThis.toLocaleString()}</td>
+                        </tr>`;
+                });
+            }
+            console.log(`Estado de cuenta ${currentSelectedClient.name}: ${currentSelectedClient.transactions.length} movimientos, saldo $${balance}`);
         }
 
         function openAbonoModal() {
@@ -4104,3 +4159,4 @@
     </script>
 </body>
 </html>
+
