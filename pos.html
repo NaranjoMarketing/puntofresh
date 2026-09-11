@@ -749,6 +749,7 @@
                             <button onclick="openPastDebtModal()" class="bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-clock-rotate-left"></i> Registrar Deuda Pasada</button>
                             <button onclick="openAbonoModal()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-hand-holding-dollar"></i> Ingresar Abono</button>
                             <button onclick="settleClientBalance()" class="bg-fresh-purple text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-fresh-dark shadow-sm flex items-center gap-1.5 transition-all"><i class="fa-solid fa-check-double"></i> Liquidar Total</button>
+                    <button onclick="limpiarDeudasSinRespaldo()" class="bg-amber-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1" title="Eliminar deudas sin factura de respaldo"><i class="fa-solid fa-broom"></i> Limpiar Sin Respaldo</button>
                     <button onclick="forceRebuildAndSync()" class="bg-neutral-800 text-white px-3 py-1.5 rounded-full text-[10px] font-bold ml-1"><i class="fa-solid fa-rotate"></i> Sincronizar Historial</button>
                         </div>
                     </div>
@@ -3438,6 +3439,122 @@
             }
             return totalFixed;
         }
+        
+        // V8: Limpiar deudas duplicadas sin respaldo en Pedidos
+        async function limpiarDeudasSinRespaldo() {
+            if(!currentSelectedClient) {
+                showToast("Selecciona un cliente primero", "error");
+                return;
+            }
+            
+            let confirm = await showCustomConfirm(
+                "Limpiar deudas sin respaldo",
+                `¿Eliminar de ${currentSelectedClient.name} todas las deudas marcadas como (Anterior) o que NO tienen factura en la hoja Pedidos?\n\nEsto corregirá cobros dobles. Se mantendrán solo las facturas con respaldo real.`
+            );
+            if(!confirm) return;
+
+            // Crear set de IDs válidos de Pedidos a crédito
+            let validOrderIds = new Set(
+                orders
+                .filter(o => o.payment === 'Crédito' && o.status !== 'Anulado')
+                .map(o => String(o.id).trim())
+            );
+
+            console.log(`Pedidos válidos a crédito: ${validOrderIds.size}`, Array.from(validOrderIds).slice(0,5));
+
+            if(!currentSelectedClient.transactions) currentSelectedClient.transactions = [];
+            
+            let originalCount = currentSelectedClient.transactions.length;
+            let removed = [];
+            let kept = [];
+
+            // Filtrar: mantener payments siempre, mantener invoices solo si tienen respaldo
+            let newTransactions = currentSelectedClient.transactions.filter(t => {
+                if(t.type === 'payment') {
+                    kept.push(t);
+                    return true; // Abonos siempre se mantienen
+                }
+                if(t.type === 'invoice') {
+                    let txId = String(t.id).trim();
+                    let hasRespaldo = validOrderIds.has(txId);
+                    // También considerar si es una factura POS recuperada (tiene recovered=true)
+                    // Si tiene respaldo, se mantiene
+                    if(hasRespaldo) {
+                        kept.push(t);
+                        return true;
+                    } else {
+                        // Sin respaldo: es deuda Anterior / manual duplicada
+                        removed.push(t);
+                        console.log(`  - Eliminando sin respaldo: ${t.id} ${t.note || ''} $${t.total}`);
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            currentSelectedClient.transactions = newTransactions;
+            
+            if(removed.length === 0) {
+                showToast("Este cliente no tiene deudas sin respaldo. Todo está con factura.", "info");
+                return;
+            }
+
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+            
+            renderAccountStatement();
+            renderClientsList();
+            
+            let totalEliminado = removed.reduce((s, t) => s + (Number(t.total)||0), 0);
+            showToast(`Se eliminaron ${removed.length} deudas sin respaldo ($${totalEliminado.toLocaleString()}) de ${currentSelectedClient.name}`, "success");
+            console.log(`Limpieza ${currentSelectedClient.name}: eliminadas ${removed.length}, total $${totalEliminado}`, removed);
+        }
+
+        async function limpiarTodosClientesSinRespaldo() {
+            let confirm = await showCustomConfirm(
+                "Limpieza GLOBAL",
+                `¿Estás seguro de limpiar TODOS los clientes? Se eliminarán de TODOS las deudas que NO tengan factura en Pedidos (las marcadas como Anterior). Esta acción no se puede deshacer.`
+            );
+            if(!confirm) return;
+
+            let validOrderIds = new Set(
+                orders.filter(o => o.payment === 'Crédito' && o.status !== 'Anulado').map(o => String(o.id).trim())
+            );
+
+            let totalClientesAfectados = 0;
+            let totalDeudasEliminadas = 0;
+            let totalMontoEliminado = 0;
+
+            clients.forEach(client => {
+                if(!client.transactions) return;
+                let originalLen = client.transactions.length;
+                let before = client.transactions.length;
+                
+                client.transactions = client.transactions.filter(t => {
+                    if(t.type === 'payment') return true;
+                    if(t.type === 'invoice') {
+                        return validOrderIds.has(String(t.id).trim());
+                    }
+                    return true;
+                });
+
+                let removedCount = before - client.transactions.length;
+                if(removedCount > 0) {
+                    totalClientesAfectados++;
+                    totalDeudasEliminadas += removedCount;
+                }
+            });
+
+            saveState();
+            sincronizarConGoogle("syncClients", clients);
+            renderClientsList();
+            if(currentSelectedClient) {
+                let fresh = clients.find(c => c.id === currentSelectedClient.id);
+                if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
+            }
+            showToast(`Limpieza global: ${totalDeudasEliminadas} deudas sin respaldo eliminadas en ${totalClientesAfectados} clientes`, "success");
+        }
+
         function forceRebuildAndSync() {
             let count = rebuildClientCreditHistory();
             if(count === 0) showToast("El historial ya está sincronizado.", "info");
