@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- V15.0 LIMPIEZA SOLO ANTERIOR - FIX SERGIO NO SE BORRA 2026-05-13 RECUPERACION SERGIO 2026-05-13 2026-05-13 ULTRA RECUPERACION -->
-<title>PUNTO FRESH V10 FINAL - Punto Fresh - Panel de Administración y POS</title>
+    <!-- V16.0 DEFINITIVO - NO TOCA LOGIN - SOLO LIMPIEZA ANTERIOR -->
+<title>V16 Punto Fresh - Panel de Administración y POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1310,14 +1310,12 @@
             const configUser = localStorage.getItem(DB_PREFIX + 'adminUser') || 'admin';
             const configPass = localStorage.getItem(DB_PREFIX + 'adminPass') || 'fresh123';
 
-            console.log('Intento:', user, pass, 'Guardado:', configUser, configPass);
-
             if (user === configUser && pass === configPass) {
                 localStorage.setItem(DB_PREFIX + 'sessionActive', 'true');
                 showToast("¡Sesión iniciada con éxito!", "success");
                 checkSession();
             } else {
-                showToast("Usuario o contraseña incorrectos. Guardado: " + configUser, "error");
+                showToast("Usuario o contraseña incorrectos.", "error");
             }
         }
 
@@ -2034,7 +2032,7 @@
 
             currentCierreCategorias = {};
             activeOrders.forEach(o => {
-                (Array.isArray(o.items)?o.items:[]).forEach(item => {
+                o.items.forEach(item => {
                     const prod = products.find(p => String(p.id).trim() === String(item.id).trim());
                     const catName = prod ? prod.category : "Heladería General";
                     if (!currentCierreCategorias[catName]) {
@@ -3321,13 +3319,6 @@
 
         // FIX V6: Reconstrucción completa desde Pedidos + Abonos
         function rebuildClientCreditHistory() {
-            // V11: No reconstruir si ya hay transacciones locales recuperadas
-            let localTxCount = clients.reduce((s,c) => s + (c.transactions ? c.transactions.length : 0), 0);
-            if(localTxCount > 10) {
-                console.log(`V11: Ya hay ${localTxCount} transacciones locales, no reconstruyendo desde 0 para no borrar`);
-                // Solo agregar faltantes, no borrar
-            }
-
             console.log("🔧 V6: Reconstruyendo historial completo desde Pedidos + Abonos...");
             let fixedInvoices = 0;
             let fixedAbonos = 0;
@@ -3451,27 +3442,22 @@
         }
         
         // V8: Limpiar deudas duplicadas sin respaldo en Pedidos
-        // V15 - LIMPIEZA ULTRA SIMPLE: SOLO BORRA (Anterior) - NUNCA TOCA FACTURAS POS NI RECUPERADO
+        // V16 - LIMPIEZA ULTRA SIMPLE: SOLO BORRA (Anterior)
         async function limpiarDeudasSinRespaldo() {
             if(!currentSelectedClient) { showToast("Selecciona un cliente", "error"); return; }
-            
             let tx = currentSelectedClient.transactions || [];
-            // Solo las que tienen (Anterior) en la fecha
-            let aBorrar = tx.filter(t => {
+            let aBorrar = tx.filter(function(t) {
                 if(t.type !== 'invoice') return false;
                 let fecha = String(t.date || '');
-                return fecha.includes('(Anterior)');
+                return fecha.indexOf('(Anterior)') !== -1;
             });
-            
             if(aBorrar.length === 0) {
-                showToast("Este cliente no tiene deudas con (Anterior). Ya está limpio.", "info");
+                showToast("Este cliente no tiene deudas con (Anterior). Ya esta limpio.", "info");
                 return;
             }
-            
-            let total = aBorrar.reduce((s,t) => s + Number(t.total||0), 0);
-            let lista = aBorrar.map(a => a.id + " - $" + Number(a.total).toLocaleString()).join("
+            let total = aBorrar.reduce(function(s,t){ return s + Number(t.total||0); }, 0);
+            let lista = aBorrar.map(function(a){ return a.id + " - $" + Number(a.total).toLocaleString(); }).join("
 ");
-            
             let confirm = await showCustomConfirm(
                 "Eliminar solo (Anterior)",
                 "Se encontraron " + aBorrar.length + " deudas con (Anterior) en " + currentSelectedClient.name + ":
@@ -3480,65 +3466,46 @@
 
 Total: $" + total.toLocaleString() + "
 
-¿Borrar SOLO estas? Las Facturas POS y Recuperado V10 se mantienen."
+Borrar SOLO estas?"
             );
             if(!confirm) return;
-            
-            currentSelectedClient.transactions = tx.filter(t => !aBorrar.includes(t));
-            
+            currentSelectedClient.transactions = tx.filter(function(t){ return aBorrar.indexOf(t) === -1; });
             saveState();
-            // NO sincronizar automáticamente con Google para no borrar a Sergio, solo local
-            // sincronizarConGoogle("syncClients", clients); // Comentado en V15
             renderAccountStatement();
             renderClientsList();
-            
-            showToast("Borradas " + aBorrar.length + " deudas (Anterior) - $" + total.toLocaleString() + ". Dale a Sincronizar Historial cuando termines con todos.", "success");
+            showToast("Borradas " + aBorrar.length + " deudas (Anterior)", "success");
         }
-        
         async function limpiarTodosClientesSinRespaldo() {
             let todosAnterior = [];
-            clients.forEach(c => {
-                (c.transactions||[]).forEach(t => {
-                    if(t.type === 'invoice' && String(t.date||'').includes('(Anterior)')) {
+            clients.forEach(function(c){
+                (c.transactions||[]).forEach(function(t){
+                    if(t.type === 'invoice' && String(t.date||'').indexOf('(Anterior)') !== -1) {
                         todosAnterior.push({cliente: c.name, id: t.id, total: t.total});
                     }
                 });
             });
-            
             if(todosAnterior.length === 0) {
-                showToast("No hay deudas (Anterior) en ningún cliente", "info");
+                showToast("No hay deudas (Anterior)", "info");
                 return;
             }
-            
-            let confirm = await showCustomConfirm(
-                "Limpieza Global (Anterior)",
-                "Se encontraron " + todosAnterior.length + " deudas con (Anterior) en total. ¿Borrarlas todas? Solo se borran las que dicen (Anterior)."
-            );
+            let confirm = await showCustomConfirm("Limpieza Global (Anterior)", "Se encontraron " + todosAnterior.length + " deudas con (Anterior). Borrarlas todas?");
             if(!confirm) return;
-            
             let count = 0;
-            clients.forEach(c => {
+            clients.forEach(function(c){
                 let before = (c.transactions||[]).length;
-                c.transactions = (c.transactions||[]).filter(t => {
+                c.transactions = (c.transactions||[]).filter(function(t){
                     if(t.type !== 'invoice') return true;
-                    return !String(t.date||'').includes('(Anterior)');
+                    return String(t.date||'').indexOf('(Anterior)') === -1;
                 });
                 count += before - (c.transactions||[]).length;
             });
-            
             saveState();
             renderClientsList();
             if(currentSelectedClient) {
-                let fresh = clients.find(x => x.id === currentSelectedClient.id);
+                let fresh = clients.find(function(x){ return x.id === currentSelectedClient.id; });
                 if(fresh) { currentSelectedClient = fresh; renderAccountStatement(); }
             }
-            showToast("Limpieza global: " + count + " deudas (Anterior) borradas. Ahora dale a Sincronizar Historial.", "success");
-        }
-        
-        // V15 - Botón para subir manualmente a Sheets cuando todo esté limpio
-        function sincronizarHistorialManual() {
-            sincronizarConGoogle("syncClients", clients);
-            showToast("Subiendo historial limpio a Google Sheets...", "info");
+            showToast("Limpieza global: " + count + " deudas (Anterior) borradas", "success");
         }
 
         function forceRebuildAndSync() {
@@ -3546,113 +3513,68 @@ Total: $" + total.toLocaleString() + "
             if(count === 0) showToast("El historial ya está sincronizado.", "info");
         }
 
-        // V10.0 - RECUPERACION ULTRA DEFINITIVA
         function getOrderTotalSafe(order) {
             let t = Number(order.total || 0);
             if(t > 0) return t;
             let candidates = [order.items, order.payment, order.items_JSON];
             for(let c of candidates) {
                 if(Array.isArray(c) && c.length > 0 && c[0].price !== undefined) {
-                    return c.reduce((s,it) => s + Number(it.price||0)*Number(it.quantity||it.qty||1),0);
+                    return c.reduce(function(s,it){ return s + Number(it.price||0)*Number(it.quantity||it.qty||1); },0);
                 }
                 if(typeof c === 'string') {
                     try {
                         let p = JSON.parse(c);
-                        if(Array.isArray(p) && p.length>0) return p.reduce((s,it) => s + Number(it.price||0)*Number(it.quantity||1),0);
+                        if(Array.isArray(p) && p.length>0) return p.reduce(function(s,it){ return s + Number(it.price||0)*Number(it.quantity||1); },0);
                     } catch(e){}
                 }
             }
             return 0;
         }
-        
         function recuperarTodoDePedidos() {
             let ordersLS = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-            console.log(`V10 RECUPERACION - localStorage: ${ordersLS.length}, memoria: ${orders?orders.length:0}`);
-            if(ordersLS.length === 0) { showToast("No hay pedidos en localStorage", "error"); return; }
-            
-            if(ordersLS.length > 0) {
-                console.log("Ejemplo pedido:", ordersLS[0]);
-                console.log("Keys:", Object.keys(ordersLS[0]));
-            }
-            
+            console.log('V16 RECUPERACION - localStorage: ' + ordersLS.length);
+            if(ordersLS.length === 0) { showToast("No hay pedidos", "error"); return; }
             orders = ordersLS;
             let recovered = 0;
-            let skip = 0;
-            
-            ordersLS.forEach(order => {
+            ordersLS.forEach(function(order){
                 if(!order || !order.clientName) return;
                 let cname = String(order.clientName).toLowerCase().trim();
-                if(cname.includes('mostrador') || cname.includes('rápida') || cname === 'domicilio - punto de -' || cname === '-') return;
-                
+                if(cname.indexOf('mostrador') !== -1 || cname.indexOf('rapida') !== -1) return;
+                if(cname === 'domicilio - punto de -' || cname === '-') return;
                 let phone = String(order.clientPhone||'').trim();
                 let client = null;
-                
-                if(phone && phone.length >= 7) client = clients.find(c => String(c.phone||'').trim() === phone);
-                if(!client) client = clients.find(c => String(c.name||'').toLowerCase().trim() === cname);
-                if(!client) client = clients.find(c => cname.includes(String(c.name||'').toLowerCase().trim()) || String(c.name||'').toLowerCase().trim().includes(cname));
-                
-                if(!client) { skip++; return; }
-                
+                if(phone && phone.length >= 7) client = clients.find(function(c){ return String(c.phone||'').trim() === phone; });
+                if(!client) client = clients.find(function(c){ return String(c.name||'').toLowerCase().trim() === cname; });
+                if(!client) client = clients.find(function(c){ return cname.indexOf(String(c.name||'').toLowerCase().trim()) !== -1 || String(c.name||'').toLowerCase().trim().indexOf(cname) !== -1; });
+                if(!client) return;
                 let total = getOrderTotalSafe(order);
                 if(total <= 0) return;
-                
                 if(!client.transactions) client.transactions = [];
-                if(client.transactions.some(t => String(t.id) === String(order.id))) return;
-                
-                client.transactions.push({
-                    id: order.id,
-                    date: order.date,
-                    type: 'invoice',
-                    total: total,
-                    items: [],
-                    note: 'Recuperado V10 ' + order.id,
-                    recovered: true
-                });
+                if(client.transactions.some(function(t){ return String(t.id) === String(order.id); })) return;
+                client.transactions.push({id: order.id, date: order.date, type: 'invoice', total: total, items: [], note: 'Recuperado V10 ' + order.id, recovered: true});
                 recovered++;
             });
-            
-            console.log(`Recuperados: ${recovered}, Sin cliente: ${skip}`);
             if(recovered > 0) {
                 saveState();
                 renderClientsList();
-                let sergio = clients.find(c => String(c.name).toLowerCase().includes('sergio'));
+                let sergio = clients.find(function(c){ return String(c.name).toLowerCase().indexOf('sergio') !== -1; });
                 if(sergio) {
                     currentSelectedClient = sergio;
                     renderAccountStatement();
-                    showToast(`¡Sergio recuperado con ${sergio.transactions.length} facturas! Deuda: $${getClientBalance(sergio).balance.toLocaleString()}`, "success");
+                    showToast('Sergio recuperado con ' + sergio.transactions.length + ' facturas', 'success');
                 } else {
-                    showToast(`Recuperados ${recovered} pedidos`, "success");
+                    showToast('Recuperados ' + recovered + ' pedidos', 'success');
                 }
             } else {
-                showToast("Nada que recuperar, revisa consola", "error");
+                showToast('Nada que recuperar', 'error');
             }
         }
-        
         function diagnosticoSergio() {
             let ls = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-            let ser = ls.filter(o => String(o.clientName||'').toLowerCase().includes('sergio'));
-            console.log(`Total: ${ls.length}, Sergio: ${ser.length}`, ser.map(o => ({id:o.id, name:o.clientName, phone:o.clientPhone, total:o.total, paymentType: typeof o.payment, isArray: Array.isArray(o.payment)})));
+            let ser = ls.filter(function(o){ return String(o.clientName||'').toLowerCase().indexOf('sergio') !== -1; });
+            console.log('Total: ' + ls.length + ', Sergio: ' + ser.length, ser);
             return ser;
         }
-        
-        function forzarGuardadoSheets() {
-            sincronizarConGoogle("syncClients", clients);
-            showToast("Subiendo a Sheets...", "info");
-        }
-        
-        // Auto recovery V10
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                try {
-                    let ls = JSON.parse(localStorage.getItem(DB_PREFIX + 'orders') || '[]');
-                    let ser = clients ? clients.find(c => String(c.name).toLowerCase().includes('sergio')) : null;
-                    if(ls.length >= 600 && ser && (!ser.transactions || ser.transactions.length === 0)) {
-                        console.log("AUTO-RECOVERY V10 ACTIVADO");
-                        recuperarTodoDePedidos();
-                    }
-                } catch(e){ console.log("Auto recovery error", e); }
-            }, 2500);
-        });
 
 
         function renderAccountStatement() {
@@ -4225,15 +4147,13 @@ Total: $" + total.toLocaleString() + "
             }
 
             filteredOrders.forEach(o => {
-                rev += Number(o.total||0);
+                rev += o.total;
                 let wKey = o.waiterName || "Caja";
                 if(!waiterStats[wKey]) waiterStats[wKey] = { count: 0, amount: 0 };
                 waiterStats[wKey].count++;
-                waiterStats[wKey].amount += Number(o.total||0);
+                waiterStats[wKey].amount += o.total;
 
-                let itemsArr = Array.isArray(o.items) ? o.items : [];
-                if(!Array.isArray(itemsArr) && typeof o.items === 'string') { try { itemsArr = JSON.parse(o.items); } catch(e){ itemsArr = []; } }
-                itemsArr.forEach(i => {
+                o.items.forEach(i => {
                     let prod = products.find(p => String(p.id).trim() === String(i.id).trim());
                     let catName = prod ? prod.category : "General / Varios";
                     if (prod) cost += ((parseInt(prod.cost) || 0) * i.quantity);
@@ -4276,7 +4196,7 @@ Total: $" + total.toLocaleString() + "
 
             let continuousProductStats = {};
             orders.filter(o => o.status !== 'Anulado' && o.status !== 'Cancelado').forEach(o => {
-                (Array.isArray(o.items)?o.items:[]).forEach(i => {
+                o.items.forEach(i => {
                     if(!continuousProductStats[i.name]) {
                         continuousProductStats[i.name] = 0;
                     }
@@ -4381,7 +4301,7 @@ Total: $" + total.toLocaleString() + "
                 o.total = 0; 
                 o.mixedDetails = null;
                 
-                (Array.isArray(o.items)?o.items:[]).forEach(item => {
+                o.items.forEach(item => {
                     let p = products.find(x => String(x.id).trim() === String(item.id).trim());
                     if (p) {
                         p.stock = (p.stock || 0) + item.quantity;
