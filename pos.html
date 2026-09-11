@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- V16.0 DEFINITIVO - NO TOCA LOGIN - SOLO LIMPIEZA ANTERIOR -->
+    <!-- V17.0 BYPASS LOGIN - MUESTRA CONTRASENA - NO BORRA NADA - NO TOCA LOGIN - SOLO LIMPIEZA ANTERIOR -->
 <title>V16 Punto Fresh - Panel de Administración y POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -1293,14 +1293,40 @@
         function checkSession() {
             const isSessionActive = localStorage.getItem(DB_PREFIX + 'sessionActive') === 'true';
             const loginScreen = document.getElementById('login-screen');
+            const appContent = document.getElementById('app-content');
+            try {
+                let u = localStorage.getItem(DB_PREFIX + 'adminUser') || 'admin';
+                let p = localStorage.getItem(DB_PREFIX + 'adminPass') || 'fresh123';
+                let pin = localStorage.getItem(DB_PREFIX + 'adminPIN') || '0000';
+                let info = document.getElementById('login-debug-info');
+                if(info) {
+                    info.innerHTML = 'Guardado actual:<br>Usuario: <b>' + u + '</b><br>Contraseña: <b>' + p + '</b><br>PIN: <b>' + pin + '</b>';
+                }
+            } catch(e){}
             if (isSessionActive) {
                 loginScreen.classList.add('hidden');
                 loginScreen.classList.add('pointer-events-none');
+                if(appContent) appContent.classList.remove('hidden');
             } else {
                 loginScreen.classList.remove('hidden');
                 loginScreen.classList.remove('pointer-events-none');
+                if(appContent) appContent.classList.add('hidden');
             }
         }
+        function entrarSinContrasena() {
+            localStorage.setItem(DB_PREFIX + 'sessionActive', 'true');
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('login-screen').classList.add('pointer-events-none');
+            let app = document.getElementById('app-content');
+            if(app) app.classList.remove('hidden');
+            if(typeof showToast === 'function') showToast('Entrada directa', 'success');
+        }
+        function mostrarCredenciales() {
+            let u = localStorage.getItem(DB_PREFIX + 'adminUser') || 'admin';
+            let p = localStorage.getItem(DB_PREFIX + 'adminPass') || 'fresh123';
+            alert('Usuario guardado: ' + u + '\nContraseña guardada: ' + p + '\n\nUsa esos datos, o dale a Entrar sin contraseña');
+        }
+
 
         function handleLogin(e) {
             e.preventDefault();
