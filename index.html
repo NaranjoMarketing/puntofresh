@@ -368,20 +368,13 @@
             updateDrawerTotals();
         }
 
-                const DEFAULT_PRODUCTS = []; // V27: Eliminados demos - nunca se usan
-        
-        // V27: Productos demo IDs para filtrar por si acaso
-        const DEMO_PRODUCT_IDS = ["DEMO-1","DEMO-2","DEMO-3","DEMO-4","DEMO-5"];
-        
-        // V27: FALLBACK RAPIDO - Productos reales embebidos para carga instantanea en 1ra visita
-        // Estos se muestran en 0ms mientras Google Sheets responde (8-10s)
-        // REEMPLAZA ESTE ARRAY CON TUS 130 PRODUCTOS REALES exportados del POS
-        // Como hacerlo: En pos.html abre consola y pega: copy(JSON.stringify(products.slice(0,20)))
-        const EMBEDDED_REAL_PRODUCTS = []; // Vacio por defecto, se llenara con cache real
-        
-        // V27: Si quieres carga instantanea en 1ra visita, pega aqui tus productos reales:
-        // Ejemplo: const EMBEDDED_REAL_PRODUCTS = [{"id":"P001","name":"Cono Sencillo",...}, ...]
-
+        const DEFAULT_PRODUCTS = [
+            { id: "DEMO-1", name: "Copa Tropical Fresh", desc: "Helado artesanal soft con fresas, kiwi, mango y lluvia de chocolate blanco.", category: "Sabores Fresh", measure: "Unidad", cost: 4000, price: 9500, stock: 50, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 12, isSpecial: true },
+            { id: "DEMO-2", name: "Granizado de Café", desc: "Café de origen granizado con un toque de crema de leche y salsa de caramelo.", category: "Café", measure: "Unidad", cost: 2500, price: 7500, stock: 40, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 8, isSpecial: false },
+            { id: "DEMO-3", name: "Gelato Frutos Rojos", desc: "Helado cremoso de frutos del bosque, sin adición de azúcar.", category: "Gelato", measure: "Unidad", cost: 3000, price: 8000, stock: 35, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 22, isSpecial: true },
+            { id: "DEMO-4", name: "Cono Especial Kids", desc: "Mini cono de vainilla decorado con gomitas y chispas de colores.", category: "Kids", measure: "Unidad", cost: 1500, price: 4500, stock: 60, img: "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=350&auto=format&fit=crop", sales: 5, isSpecial: false },
+            { id: "DEMO-5", name: "Malteada Tentación Oreo", desc: "Cremosa malteada preparada con helado artesanal, galletas Oreo y chantilly.", category: "Malteadas", measure: "Unidad", cost: 3500, price: 9800, stock: 30, img: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?q=80&w=350&auto=format&fit=crop", sales: 15, isSpecial: false }
+        ];
 
         function showToast(msg, type='info') {
             const container = document.getElementById('toast-container');
@@ -419,158 +412,23 @@
                 document.getElementById('announcement-text-display').innerText = announcementMessage;
             }
 
-            // V27: CARGA ULTRA-RAPIDA - Cache-first sin esperar red
-            let hasCache = false;
-            let cachedReal = [];
-            
-            try {
-                let stored = localStorage.getItem(DB_PREFIX + 'products');
-                if(stored) {
-                    let parsed = JSON.parse(stored);
-                    // Filtrar cualquier demo que haya quedado
-                    let reales = parsed.filter(function(p){ 
-                        let id = String(p.id||'');
-                        return !id.startsWith('DEMO-') && !DEMO_PRODUCT_IDS.includes(id); 
-                    });
-                    if(reales.length > 0) {
-                        cachedReal = reales;
-                        products = reales;
-                        hasCache = true;
-                        console.log("V27: Cache REAL encontrado: " + reales.length + " productos - RENDER INSTANTANEO 0ms");
-                        buildCategoriesMenu();
-                        renderSpecials();
-                        renderProducts();
-                        // Actualizacion silenciosa en background 2s despues
-                        setTimeout(function(){ loadDataFromCloudInBackground(); }, 2000);
-                    }
-                }
-            } catch(e){ console.warn("V27 cache error", e); }
-            
-            // Si no hay cache, intentar usar EMBEDDED_REAL_PRODUCTS (si el admin los pego)
-            if(!hasCache && typeof EMBEDDED_REAL_PRODUCTS !== 'undefined' && EMBEDDED_REAL_PRODUCTS.length > 0) {
-                console.log("V27: Usando EMBEDDED_REAL_PRODUCTS: " + EMBEDDED_REAL_PRODUCTS.length + " - RENDER INSTANTANEO");
-                products = EMBEDDED_REAL_PRODUCTS.filter(function(p){ return !String(p.id||'').startsWith('DEMO-'); });
-                hasCache = true;
-                buildCategoriesMenu();
-                renderSpecials();
-                renderProducts();
-                // Guardar en cache para proximas visitas
-                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
-                localStorage.setItem(DB_PREFIX + 'products_cache_time', String(Date.now()));
-                setTimeout(function(){ loadDataFromCloudInBackground(); }, 2000);
+            const stored = localStorage.getItem(DB_PREFIX + 'products');
+            if (stored) {
+                products = JSON.parse(stored);
             }
-            
-            // Si aun no hay nada (1ra visita sin cache ni embedded), mostrar skeleton rapido
-            if(!hasCache) {
-                console.log("V27: Sin cache - 1ra visita, mostrando skeleton + fetch 10s");
-                let grid = document.getElementById('menu-grid');
-                if(grid) {
-                    let skeleton = '';
-                    for(let i=0;i<8;i++){
-                        skeleton += '<div class="bg-white rounded-2xl p-3 border border-neutral-100 animate-pulse"><div class="h-32 bg-neutral-100 rounded-xl mb-3"></div><div class="h-4 bg-neutral-100 rounded mb-2"></div><div class="h-3 bg-neutral-100 rounded w-2/3 mb-2"></div><div class="h-8 bg-fresh-lightPurple/50 rounded-xl"></div></div>';
-                    }
-                    grid.innerHTML = skeleton;
-                }
-                products = [];
+            if (!products || products.length === 0) {
+                products = DEFAULT_PRODUCTS;
+                localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
             }
 
+            buildCategoriesMenu();
+            renderSpecials();
+            renderProducts();
             setDeliveryType('Llevar');
             setPaymentMethod('Nequi');
             updateCartBadge();
             
-            // Si no teniamos cache, hacer fetch ahora (1ra visita)
-            if(!hasCache) {
-                loadDataFromCloudFirstTime();
-            }
-        }
-        
-        async function loadDataFromCloudInBackground() {
-            // Actualizacion silenciosa, no bloquea UI, no muestra mensajes de error
-            try {
-                if (!URL_API || URL_API.includes("REEMPLAZAR")) return;
-                console.log("V27 BG: Actualizando productos en background...");
-                let controller = new AbortController();
-                let timeout = setTimeout(function(){ controller.abort(); }, 15000); // 15s background
-                let response = await fetch(URL_API + (URL_API.includes('?') ? '&' : '?') + 't=' + Date.now(), { signal: controller.signal, cache: 'no-store' });
-                clearTimeout(timeout);
-                let data = await response.json();
-                if(data && data.products && data.products.length > 0) {
-                    let reales = data.products.filter(function(p){ return !String(p.id||'').startsWith('DEMO-'); });
-                    if(reales.length > 0) {
-                        let oldStr = localStorage.getItem(DB_PREFIX + 'products');
-                        let newStr = JSON.stringify(reales);
-                        if(newStr !== oldStr) {
-                            console.log("V27 BG: Productos actualizados " + reales.length);
-                            products = reales;
-                            localStorage.setItem(DB_PREFIX + 'products', newStr);
-                            localStorage.setItem(DB_PREFIX + 'products_cache_time', String(Date.now()));
-                            buildCategoriesMenu();
-                            renderSpecials();
-                            renderProducts();
-                        } else {
-                            console.log("V27 BG: Sin cambios");
-                        }
-                    }
-                }
-            } catch(e){ console.warn("V27 BG: Fallo silencioso", e.message); }
-        }
-        
-        async function loadDataFromCloudFirstTime() {
-            // Solo para 1ra visita sin cache - con reintentos y sin timeout corto
-            if (!URL_API || URL_API.includes("REEMPLAZAR")) {
-                showFirstTimeError();
-                return;
-            }
-            
-            let attempts = 0;
-            while(attempts < 3) {
-                attempts++;
-                console.log("V27 1ST: Intento " + attempts + "/3 - Fetch 15s timeout...");
-                try {
-                    let controller = new AbortController();
-                    let timeout = setTimeout(function(){ controller.abort(); }, 15000); // 15s por intento
-                    let response = await fetch(URL_API + (URL_API.includes('?') ? '&' : '?') + 't=' + Date.now() + '&first=1', { signal: controller.signal, cache: 'no-store' });
-                    clearTimeout(timeout);
-                    
-                    let data = await response.json();
-                    console.log("V27 1ST: Datos recibidos intento " + attempts, data ? data.products?.length + " productos" : "vacio");
-                    
-                    if(data && data.products && data.products.length > 0) {
-                        let reales = data.products.filter(function(p){ return !String(p.id||'').startsWith('DEMO-'); });
-                        if(reales.length > 0) {
-                            products = reales;
-                            localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
-                            localStorage.setItem(DB_PREFIX + 'products_cache_time', String(Date.now()));
-                            console.log("V27 1ST: Guardados " + reales.length + " productos reales - RENDER");
-                            buildCategoriesMenu();
-                            renderSpecials();
-                            renderProducts();
-                            hideFirstTimeError();
-                            return;
-                        }
-                    }
-                    throw new Error("Sin productos reales");
-                } catch(err) {
-                    console.warn("V27 1ST: Intento " + attempts + " fallo: " + err.message);
-                    if(attempts < 3) {
-                        await new Promise(function(r){ setTimeout(r, attempts * 2000); });
-                    } else {
-                        console.error("V27 1ST: Todos los intentos fallaron");
-                        showFirstTimeError();
-                    }
-                }
-            }
-        }
-        
-        function showFirstTimeError() {
-            let grid = document.getElementById('menu-grid');
-            if(grid) {
-                grid.innerHTML = '<div class="col-span-full py-16 text-center"><div class="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fa-solid fa-wifi text-amber-500 text-xl"></i></div><p class="text-sm font-bold text-neutral-700">Conexión lenta con el servidor</p><p class="text-xs text-neutral-500 mt-1 max-w-[280px] mx-auto">Google está iniciando. Esto solo pasa la primera vez, luego cargará instantáneo.</p><button onclick="loadDataFromCloudFirstTime()" class="mt-5 px-6 py-3 bg-fresh-purple text-white rounded-xl text-xs font-bold shadow-lg"><i class="fa-solid fa-rotate mr-2"></i>Reintentar carga</button></div>';
-            }
-        }
-        function hideFirstTimeError() {
-            let el = document.getElementById('slow-connection-msg');
-            if(el) el.remove();
+            loadDataFromCloud();
         }
 
         function buildCategoriesMenu() {
@@ -660,18 +518,6 @@
         }
 
         function renderProducts() {
-            // V27: Filtrar demos siempre
-            if(products && products.length > 0) {
-                let antes = products.length;
-                products = products.filter(function(p){ return !String(p.id||'').startsWith('DEMO-') && !(typeof DEMO_PRODUCT_IDS !== 'undefined' && DEMO_PRODUCT_IDS.includes(p.id)); });
-                if(antes !== products.length) {
-                    localStorage.setItem(DB_PREFIX + 'products', JSON.stringify(products));
-                }
-            }
-            if(!products || products.length === 0) {
-                return; // No renderizar si aun no hay productos, skeleton ya esta
-            }
-
             const grid = document.getElementById('menu-grid');
             const emptyState = document.getElementById('empty-state');
             if(!grid || !emptyState) return;
